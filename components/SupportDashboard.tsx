@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SupportTicket, User, Order } from '../types';
 import { supportService } from '../services/supportService';
 import { mockOrders, users } from '../services/mockData';
-import { LifeBuoy, Plus, CheckCircle2, Circle, AlertCircle, Search } from 'lucide-react';
+import { LifeBuoy, Plus, CheckCircle2, Circle, AlertCircle, Search, RefreshCw } from 'lucide-react';
 import SupportTicketModal from './SupportTicketModal';
 
 const SupportDashboard: React.FC = () => {
@@ -74,9 +74,18 @@ const SupportDashboard: React.FC = () => {
                 ))}
             </div>
          </div>
-         <button onClick={() => setIsModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
-            <Plus size={18} /> New Ticket
-         </button>
+         <div className="flex items-center gap-2">
+            <button 
+                onClick={loadTickets} 
+                className="p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"
+                title="Refresh Tickets"
+            >
+                <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button onClick={() => setIsModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
+                <Plus size={18} /> New Ticket
+            </button>
+         </div>
       </div>
 
       {/* Ticket List */}

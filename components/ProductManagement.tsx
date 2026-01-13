@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Category } from '../types';
 import { inventoryService } from '../services/inventoryService';
-import { Edit2, Trash2, Plus, Search, Package } from 'lucide-react';
+import { Edit2, Trash2, Plus, Search, Package, RefreshCw } from 'lucide-react';
 import ProductFormModal from './ProductFormModal';
 import AsyncImage from './AsyncImage';
 
@@ -77,9 +77,18 @@ const ProductManagement: React.FC = () => {
                />
             </div>
          </div>
-         <button onClick={openAddModal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
-            <Plus size={18} /> Add Product
-         </button>
+         <div className="flex items-center gap-2">
+            <button 
+              onClick={loadData} 
+              className="p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"
+              title="Refresh Inventory"
+            >
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button onClick={openAddModal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm">
+                <Plus size={18} /> Add Product
+            </button>
+         </div>
       </div>
 
       {/* Product Grid */}

@@ -35,12 +35,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, selectedOrderId, onSele
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold sticky top-0 z-10">
-              <th className="px-6 py-4">Order #</th>
-              <th className="px-6 py-4">Customer</th>
-              <th className="px-6 py-4">Date</th>
-              <th className="px-6 py-4">Total</th>
-              <th className="px-6 py-4 text-center">Status</th>
-              <th className="px-6 py-4 text-center">Label</th>
+              <th className="px-4 md:px-6 py-4">Order #</th>
+              <th className="px-4 md:px-6 py-4">Customer</th>
+              <th className="hidden md:table-cell px-6 py-4">Date</th>
+              <th className="hidden lg:table-cell px-6 py-4">Total</th>
+              <th className="px-4 md:px-6 py-4 text-center">Status</th>
+              <th className="hidden md:table-cell px-6 py-4 text-center">Label</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -66,32 +66,32 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, selectedOrderId, onSele
                     }
                   `}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                     <span className={`font-mono font-medium ${selectedOrderId === order.id ? 'text-indigo-700' : 'text-slate-700'}`}>
                       {order.orderNumber}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-4 md:px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col">
                       <span className="font-medium text-slate-800">
                         {order.user?.firstName} {order.user?.lastName}
                       </span>
-                      <span className="text-xs text-slate-500">{order.user?.email}</span>
+                      <span className="text-xs text-slate-500 hidden md:inline">{order.user?.email}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
+                  <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap text-sm text-slate-600">
                     {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(order.orderDate))}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-800">
+                  <td className="hidden lg:table-cell px-6 py-4 whitespace-nowrap font-medium text-slate-800">
                     €{order.totalAmount.toFixed(2)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                  <td className="px-4 md:px-6 py-4 whitespace-nowrap text-center">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(order.status)}`}>
-                      {getStatusIcon(order.status)}
+                      <span className="md:inline hidden">{getStatusIcon(order.status)}</span>
                       {order.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                  <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap text-center">
                     {order.isLabelPrinted ? (
                       <span className="inline-flex items-center text-green-600 bg-green-50 px-2 py-1 rounded text-xs font-medium border border-green-100">
                         <CheckCircle2 size={12} className="mr-1" />

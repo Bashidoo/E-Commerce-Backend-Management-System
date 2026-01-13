@@ -56,6 +56,7 @@ export interface Order {
   // Extension fields for Label Printing System
   isLabelPrinted: boolean;
   labelPrintedDate?: string | null; // ISO Date string
+  labelUrl?: string | null; // URL to the PDF label
 }
 
 export interface SupportTicket {
@@ -73,8 +74,19 @@ export interface SupportTicket {
   lastUpdated?: string;
 }
 
+export interface PrinterDevice {
+  uid: string; // Unique ID (MAC or Name)
+  name: string;
+  connection: 'lan' | 'bluetooth';
+  deviceObj?: any; // BluetoothDevice object or BrowserPrint device object
+}
+
 export interface AppSettings {
   connectionString: string;
-  printerName: string;
+  printerName: string; // Legacy field for string name
+  selectedPrinter?: PrinterDevice; // New field for full device object
   autoPrint: boolean;
+  // Sendify Integration
+  sendifyApiUrl: string;
+  sendifyApiKey: string;
 }

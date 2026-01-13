@@ -22,7 +22,7 @@ class OrderRepository {
     });
   }
 
-  async updateOrderLabelStatus(orderId: number, isPrinted: boolean): Promise<Order> {
+  async updateOrderLabelStatus(orderId: number, isPrinted: boolean, labelUrl?: string): Promise<Order> {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         const orderIndex = this.orders.findIndex(o => o.id === orderId);
@@ -31,10 +31,26 @@ class OrderRepository {
           return;
         }
 
+        /* 
+           SUPABASE INTEGRATION NOTE:
+           In the real implementation, this would look like:
+           
+           const { data, error } = await supabase
+             .from('Orders')
+             .update({ 
+                is_label_printed: isPrinted, 
+                label_url: labelUrl 
+             })
+             .eq('id', orderId)
+             .select()
+             .single();
+        */
+
         const updatedOrder = {
           ...this.orders[orderIndex],
           isLabelPrinted: isPrinted,
-          labelPrintedDate: isPrinted ? new Date().toISOString() : null
+          labelPrintedDate: isPrinted ? new Date().toISOString() : null,
+          labelUrl: labelUrl || this.orders[orderIndex].labelUrl
         };
 
         this.orders[orderIndex] = updatedOrder;
