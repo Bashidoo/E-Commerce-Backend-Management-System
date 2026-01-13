@@ -1,4 +1,4 @@
-import { Order, Product, User, Category } from '../types';
+import { Order, Product, User, Category, SupportTicket } from '../types';
 
 export const mockCategories: Category[] = [
   { id: 1, name: "Perfume" },
@@ -7,7 +7,7 @@ export const mockCategories: Category[] = [
   { id: 4, name: "Travel Size" }
 ];
 
-const users: User[] = [
+export const users: User[] = [
   { id: 1, email: "john.doe@example.com", firstName: "John", lastName: "Doe", address: "123 Maple St, Springfield", role: "Customer" },
   { id: 2, email: "jane.smith@example.com", firstName: "Jane", lastName: "Smith", address: "456 Oak Ave, Metropolis", role: "Customer" },
 ];
@@ -106,4 +106,34 @@ export const mockOrders: Order[] = [
       { id: 4, quantity: 2, unitPrice: 85.00, orderId: 1003, productId: 101, product: mockProducts[0] }
     ]
   },
+];
+
+export const mockTickets: SupportTicket[] = [
+  {
+    id: 1,
+    userId: 1,
+    user: users[0],
+    ticketNumber: "TKT-2024-001",
+    subject: "Order not received",
+    description: "I placed order DNO-A1B2 two days ago but haven't received tracking.",
+    status: "Open",
+    priority: "High",
+    orderId: 1001,
+    orderNumber: "DNO-A1B2",
+    createdAt: new Date(Date.now() - 86400000).toISOString() // 1 day ago
+  },
+  {
+    id: 2,
+    userId: 2,
+    user: users[1],
+    ticketNumber: "TKT-2024-002",
+    subject: "Damaged item",
+    description: "The Vanilla Silk bottle arrived cracked.",
+    status: "Resolved",
+    priority: "Medium",
+    orderId: 1002,
+    orderNumber: "DNO-C3D4",
+    createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+    lastUpdated: new Date(Date.now() - 3600000).toISOString()
+  }
 ];

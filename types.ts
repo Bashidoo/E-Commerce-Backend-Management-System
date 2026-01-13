@@ -58,6 +58,21 @@ export interface Order {
   labelPrintedDate?: string | null; // ISO Date string
 }
 
+export interface SupportTicket {
+  id: number;
+  userId: number;
+  user?: User; // Hydrated on frontend
+  orderId?: number | null;
+  orderNumber?: string;
+  ticketNumber: string; // "TKT-2024-001"
+  subject: string;
+  description: string;
+  status: 'Open' | 'Resolved' | 'Closed';
+  priority: 'Low' | 'Medium' | 'High';
+  createdAt: string;
+  lastUpdated?: string;
+}
+
 export interface AppSettings {
   connectionString: string;
   printerName: string;

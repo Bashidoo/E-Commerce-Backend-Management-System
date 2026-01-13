@@ -5,9 +5,10 @@ import OrderTable from './components/OrderTable';
 import OrderDetailsPanel from './components/OrderDetailsPanel';
 import SettingsModal from './components/SettingsModal';
 import ProductManagement from './components/ProductManagement';
-import { Search, Settings, Filter, RefreshCw, Printer, LayoutDashboard, Package } from 'lucide-react';
+import SupportDashboard from './components/SupportDashboard';
+import { Search, Settings, Filter, RefreshCw, Printer, LayoutDashboard, Package, LifeBuoy } from 'lucide-react';
 
-type ViewMode = 'ORDERS' | 'INVENTORY';
+type ViewMode = 'ORDERS' | 'INVENTORY' | 'SUPPORT';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('ORDERS');
@@ -91,6 +92,14 @@ const App: React.FC = () => {
              <Package size={20} />
              <span className="font-medium">Product Inventory</span>
            </button>
+
+           <button 
+             onClick={() => setViewMode('SUPPORT')}
+             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${viewMode === 'SUPPORT' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}
+           >
+             <LifeBuoy size={20} />
+             <span className="font-medium">Support Desk</span>
+           </button>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
@@ -109,6 +118,8 @@ const App: React.FC = () => {
         
         {viewMode === 'INVENTORY' ? (
           <ProductManagement />
+        ) : viewMode === 'SUPPORT' ? (
+          <SupportDashboard />
         ) : (
           /* Order Dashboard View */
           <main className="flex-1 flex overflow-hidden p-6 gap-6">
