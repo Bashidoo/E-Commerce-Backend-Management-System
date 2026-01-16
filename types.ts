@@ -31,6 +31,7 @@ export interface Product {
   reviewCount: number;
   categoryId: number;
   category?: Category;
+  isDeleted?: boolean; // New field for soft delete
 }
 
 export interface OrderItem {
@@ -53,10 +54,19 @@ export interface Order {
   user?: User;
   orderItems: OrderItem[];
   
-  // Extension fields for Label Printing System
+  // Label Printing Fields
   isLabelPrinted: boolean;
   labelPrintedDate?: string | null; // ISO Date string
   labelUrl?: string | null; // URL to the PDF label
+
+  // Address Snapshot Fields (Matches SQL Schema)
+  shippingAddressSnapshot?: string;
+  shippingCitySnapshot?: string;
+  shippingCountrySnapshot?: string;
+  shippingPostalCodeSnapshot?: string;
+  shippingPhoneSnapshot?: string;
+  shippingStateSnapshot?: string;
+  shippingZipSnapshot?: string;
 }
 
 export interface SupportTicket {

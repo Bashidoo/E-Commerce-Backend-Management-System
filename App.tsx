@@ -6,12 +6,15 @@ import OrderDetailsPanel from './components/OrderDetailsPanel';
 import SettingsModal from './components/SettingsModal';
 import ProductManagement from './components/ProductManagement';
 import SupportDashboard from './components/SupportDashboard';
-import { Search, Settings, RefreshCw, LayoutDashboard, Package, LifeBuoy, AlertCircle } from 'lucide-react';
+import { Search, Settings, RefreshCw, LayoutDashboard, Package, LifeBuoy, AlertCircle, Moon, Sun } from 'lucide-react';
+import { NotificationContainer } from './components/Notifications';
+import { useTheme } from './contexts/ThemeContext';
 
 type ViewMode = 'ORDERS' | 'INVENTORY' | 'SUPPORT';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('ORDERS');
+  const { theme, toggleTheme } = useTheme();
   
   // Order State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -70,7 +73,8 @@ const App: React.FC = () => {
   }, [orders, searchQuery, statusFilter, labelFilter]);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-slate-100 overflow-hidden font-sans relative">
+    <div className="flex flex-col md:flex-row h-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans relative transition-colors duration-300">
+      <NotificationContainer />
       
       {/* Mobile Header */}
       <div className="md:hidden h-16 bg-black text-white flex items-center justify-between px-4 shrink-0 z-30">
@@ -78,9 +82,14 @@ const App: React.FC = () => {
              <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center font-bold mr-3 shadow-lg shadow-indigo-600/30">O</div>
              <h1 className="font-bold text-lg tracking-tight">OrderFlow</h1>
         </div>
-        <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-300 hover:text-white">
-            <Settings size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+            <button onClick={toggleTheme} className="p-2 text-slate-300 hover:text-white">
+                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+            <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-slate-300 hover:text-white">
+                <Settings size={20} />
+            </button>
+        </div>
       </div>
 
       {/* Sidebar Navigation (Desktop) / Bottom Nav (Mobile) */}
@@ -89,6 +98,7 @@ const App: React.FC = () => {
         fixed bottom-0 left-0 right-0 z-50 flex-row h-16 items-center justify-around md:justify-start
         bg-white border-t border-slate-200 text-slate-500
         md:bg-black md:border-t-0 md:text-slate-400
+        dark:bg-black dark:border-slate-800 dark:text-slate-400
       ">
         {/* Desktop Header */}
         <div className="hidden md:flex h-16 items-center px-6 border-b border-white/10">
@@ -157,8 +167,16 @@ const App: React.FC = () => {
            </div>
         </nav>
 
-        <div className="hidden md:block p-4 border-t border-white/10">
-          <button 
+        <div className="hidden md:block p-4 border-t border-white/10 space-y-2">
+           <button 
+             onClick={toggleTheme}
+             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+           >
+             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+             <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+           </button>
+           
+           <button 
              onClick={() => setIsSettingsOpen(true)}
              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
            >
@@ -186,28 +204,28 @@ const App: React.FC = () => {
                 ${selectedOrder ? 'hidden md:flex' : 'flex'}
             `}>
               {/* Controls */}
-              <div className="bg-white p-3 md:p-4 rounded-xl border border-slate-200 shadow-sm mb-4 flex flex-col md:flex-row gap-3 md:items-center shrink-0">
+              <div className="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-4 flex flex-col md:flex-row gap-3 md:items-center shrink-0">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="text" placeholder="Search Orders..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white dark:placeholder-slate-500 transition-colors"
                   />
                 </div>
                 {/* Filters */}
                 <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
-                   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg text-sm px-2 py-2 outline-none">
+                   <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-2 py-2 outline-none dark:text-slate-300">
                      <option value="All">All Statuses</option>
                      <option value="Pending">Pending</option>
                      <option value="Processing">Processing</option>
                      <option value="Shipped">Shipped</option>
                    </select>
-                   <select value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg text-sm px-2 py-2 outline-none">
+                   <select value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-2 py-2 outline-none dark:text-slate-300">
                      <option value="All">Labels</option>
                      <option value="Printed">Printed</option>
                      <option value="Pending">Pending</option>
                    </select>
-                   <button onClick={fetchOrders} className="p-2 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg"><RefreshCw size={20} className={loading ? 'animate-spin' : ''} /></button>
+                   <button onClick={fetchOrders} className="p-2 text-slate-400 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 rounded-lg"><RefreshCw size={20} className={loading ? 'animate-spin' : ''} /></button>
                 </div>
               </div>
 
@@ -219,7 +237,7 @@ const App: React.FC = () => {
             {/* Details Panel - Full screen on mobile, panel on desktop */}
             {/* Used absolute inset-0 for mobile to ensure full coverage without parent padding interference */}
             <div className={`
-                md:w-[450px] shrink-0 flex flex-col bg-white
+                md:w-[450px] shrink-0 flex flex-col bg-white dark:bg-slate-900
                 absolute inset-0 md:static md:h-full z-40 transition-transform duration-300 md:p-6 md:pl-0
                 ${selectedOrder ? 'translate-x-0' : 'translate-x-full md:translate-x-0 md:hidden'}
             `}>

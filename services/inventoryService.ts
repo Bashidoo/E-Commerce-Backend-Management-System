@@ -5,7 +5,7 @@ class InventoryService {
   private products: Product[] = [...mockProducts];
   private categories: Category[] = [...mockCategories];
 
-  // Async get all products
+  // Async get all products (Active and Soft Deleted)
   async getAllProducts(): Promise<Product[]> {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -53,10 +53,11 @@ class InventoryService {
           // Create
           const newProduct = {
             ...product,
-            id: Math.max(...this.products.map(p => p.id)) + 1,
+            id: Math.max(...this.products.map(p => p.id), 0) + 1,
             category,
             reviewCount: 0,
-            rating: 0
+            rating: 0,
+            isDeleted: false
           } as Product;
           this.products.push(newProduct);
           resolve(newProduct);
@@ -65,14 +66,40 @@ class InventoryService {
     });
   }
 
-  // Delete Product
+  // Soft Delete Product (Move to Trash)
   async deleteProduct(id: number): Promise<void> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        this.products = this.products.filter(p => p.id !== id);
+        const index = this.products.findIndex(p => p.id === id);
+        if (index !== -1) {
+            this.products[index].isDeleted = true;
+        }
         resolve();
       }, 400);
     });
+  }
+
+  // Restore Product from Trash
+  async restoreProduct(id: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const index = this.products.findIndex(p => p.id === id);
+        if (index !== -1) {
+            this.products[index].isDeleted = false;
+        }
+        resolve();
+      }, 400);
+    });
+  }
+
+  // Permanent Delete
+  async permanentDeleteProduct(id: number): Promise<void> {
+      return new Promise((resolve) => {
+          setTimeout(() => {
+              this.products = this.products.filter(p => p.id !== id);
+              resolve();
+          }, 400);
+      });
   }
 }
 

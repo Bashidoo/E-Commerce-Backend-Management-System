@@ -2,14 +2,15 @@ import { Order, AppSettings } from '../types';
 
 /**
  * Service to interact with the Sendify API for label generation.
- * NOTE: In a production environment, calling 3rd party APIs directly from the browser
- * may cause CORS issues. It is recommended to route this through a backend proxy 
- * (e.g., Supabase Edge Functions or a .NET API).
  */
 class SendifyService {
   private getSettings(): AppSettings {
-    const saved = localStorage.getItem('appSettings');
-    if (saved) return JSON.parse(saved);
+    try {
+      const saved = localStorage.getItem('appSettings');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error("Failed to parse settings", e);
+    }
     return {
       connectionString: '',
       printerName: '',
@@ -19,12 +20,75 @@ class SendifyService {
     };
   }
 
+  /**
+   * Generates a shipping label using the specific Sendify Print Endpoint.
+   * Prioritizes the key from App Settings (runtime update), falls back to process.env.
+   */
+  async generateLabel(orderId: number): Promise<string> {
+    try {
+      const settings = this.getSettings();
+      // Allow runtime configuration override, otherwise use build-time env var
+      const apiKey = settings.sendifyApiKey || process.env.SENDIFY_API_KEY;
+      const printUrl = 'https://app.sendify.se/external/v1/shipments/print';
+
+      if (!apiKey) {
+        throw new Error("Configuration Error: Sendify API Key is missing. Please configure it in System Settings.");
+      }
+
+      const payload = {
+        shipment_ids: [orderId], // Using the Order ID as requested
+        document_type: 'label',
+        label_layout: '1x2',
+        output_format: 'url'
+      };
+
+      const response = await fetch(printUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        // Attempt to parse error message from API
+        let errorMessage = "Label generation failed.";
+        try {
+          const errData = await response.json();
+          errorMessage = errData.message || errData.error || errorMessage;
+        } catch (e) { /* ignore json parse error */ }
+        
+        throw new Error(`Sendify API Error: ${errorMessage}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.output_url) {
+        throw new Error("API returned success but no output_url was found.");
+      }
+
+      return data.output_url;
+
+    } catch (error: any) {
+      console.error("Sendify Label Generation Failed:", error);
+      // Re-throw to be caught by the UI
+      throw new Error(error.message || "Unable to connect to Sendify API.");
+    }
+  }
+
+  /**
+   * Legacy method for booking (kept for backward compatibility/demo)
+   */
   async createShipment(order: Order): Promise<string> {
     const settings = this.getSettings();
     const apiUrl = settings.sendifyApiUrl || 'https://api.sendify.com/v1';
     
-    if (!settings.sendifyApiKey) {
-      throw new Error("Sendify API Key is missing in settings.");
+    const apiKey = settings.sendifyApiKey || process.env.SENDIFY_API_KEY;
+    
+    if (!apiKey) {
+      // Return mock for demo purposes if no key configured in settings
+      return this.getMockLabelUrl();
     }
 
     // Map Order to Sendify Payload
@@ -64,38 +128,40 @@ class SendifyService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.sendifyApiKey}`
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        // Handle mock scenario for demo purposes if real API fails (likely due to invalid key/cors)
         console.warn("Real API call failed, falling back to mock PDF for demo.");
         return this.getMockLabelUrl();
       }
 
       const data = await response.json();
-      // Assuming API returns { label_url: "..." }
       return data.label_url || this.getMockLabelUrl();
 
     } catch (error) {
       console.error("Sendify API Error:", error);
-      // Fallback for demo experience
       return this.getMockLabelUrl();
     }
   }
 
   async testConnection(): Promise<boolean> {
     const settings = this.getSettings();
-    if (!settings.sendifyApiKey) return false;
+    const apiKey = settings.sendifyApiKey || process.env.SENDIFY_API_KEY;
+    
+    if (!apiKey) return false;
 
     try {
       // Simple GET to check auth
+      // Note: Sendify API structure varies, assuming /products is a valid endpoint for auth check
+      // Adjust endpoint based on actual API documentation if needed.
       const response = await fetch(`${settings.sendifyApiUrl}/products`, {
         method: 'GET',
         headers: {
-            'Authorization': `Bearer ${settings.sendifyApiKey}`
+            'Authorization': `Bearer ${apiKey}`,
+            'x-api-key': apiKey // Try both headers for test
         }
       });
       return response.ok;
