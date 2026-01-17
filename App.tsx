@@ -9,12 +9,14 @@ import SupportDashboard from './components/SupportDashboard';
 import { Search, Settings, RefreshCw, LayoutDashboard, Package, LifeBuoy, AlertCircle, Moon, Sun } from 'lucide-react';
 import { NotificationContainer } from './components/Notifications';
 import { useTheme } from './contexts/ThemeContext';
+import { useSettings } from './contexts/SettingsContext';
 
 type ViewMode = 'ORDERS' | 'INVENTORY' | 'SUPPORT';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('ORDERS');
   const { theme, toggleTheme } = useTheme();
+  const { isConfigured } = useSettings();
   
   // Order State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -43,7 +45,12 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    
+    // Force open settings if Supabase isn't configured
+    if (!isConfigured) {
+        setIsSettingsOpen(true);
+    }
+  }, [isConfigured]);
 
   const handleOrderUpdate = (updatedOrder: Order) => {
     setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
@@ -75,6 +82,13 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans relative transition-colors duration-300">
       <NotificationContainer />
+      
+      {/* Configuration Banner */}
+      {!isConfigured && (
+          <div className="absolute top-0 left-0 right-0 z-[60] bg-amber-500 text-white text-xs text-center py-1 font-bold">
+              Database not configured. Please open settings to connect Supabase.
+          </div>
+      )}
       
       {/* Mobile Header */}
       <div className="md:hidden h-16 bg-black text-white flex items-center justify-between px-4 shrink-0 z-30">

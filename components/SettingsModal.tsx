@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, PrinterDevice } from '../types';
-import { X, Save, Wifi, Loader2, CheckCircle2, AlertCircle, Truck, Printer, Bluetooth, Monitor } from 'lucide-react';
+import { X, Save, Wifi, Loader2, CheckCircle2, AlertCircle, Truck, Printer, Bluetooth, Monitor, Database } from 'lucide-react';
 import { sendifyService } from '../services/sendifyService';
 import { useZebraPrinters } from '../hooks/useZebraPrinters';
 import { useNotification } from '../contexts/NotificationContext';
+import { useSettings } from '../contexts/SettingsContext';
+import { getSupabase } from '../lib/supabaseClient';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -13,10 +15,17 @@ interface SettingsModalProps {
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'printers'>('general');
   const { showNotification } = useNotification();
+  const { saveSettings: saveSupabaseSettings, isConfigured } = useSettings();
   const { printers, isScanning, error: printerError, scanLanPrinters, scanBluetooth, printTestLabel } = useZebraPrinters();
   
+  // Local state for form inputs
+  const [supabaseForm, setSupabaseForm] = useState({
+      url: '',
+      key: ''
+  });
+
   const [settings, setSettings] = useState<AppSettings>({
-    connectionString: '',
+    connectionString: '', // Legacy
     printerName: 'Default Printer',
     autoPrint: false,
     sendifyApiUrl: 'https://api.sendify.com/v1',
@@ -30,48 +39,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const [sendifyTestStatus, setSendifyTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
-    // Load from local storage on mount
+    // Load existing settings
     try {
       const savedSettings = localStorage.getItem('appSettings');
       if (savedSettings) {
-        setSettings({
-            ...settings, // defaults
-            ...JSON.parse(savedSettings) // overrides
-        });
+        setSettings({ ...settings, ...JSON.parse(savedSettings) });
       }
+      
+      const storedUrl = localStorage.getItem('supabase_url') || '';
+      const storedKey = localStorage.getItem('supabase_key') || '';
+      setSupabaseForm({ url: storedUrl, key: storedKey });
+      
     } catch (err) {
       console.error("Failed to load settings", err);
-      showNotification('error', 'Failed to load saved settings.');
     }
-  }, []);
+  }, [isOpen]);
 
   const handleSave = async () => {
     try {
-      // Validation: Check for minimal settings if Sendify is used
-      if (settings.sendifyApiKey && settings.sendifyApiKey.length < 5) {
-         showNotification('warning', 'The Sendify API Key seems too short. Please double-check.');
-         // We allow saving but warn the user
+      // Save Supabase Settings
+      if (supabaseForm.url && supabaseForm.key) {
+          saveSupabaseSettings(supabaseForm.url, supabaseForm.key);
       }
 
-      // We can't stringify complex objects like BluetoothDevice in selectedPrinter.
-      // So we strip the deviceObj before saving to local storage.
+      // Save other settings
       const settingsToSave = {
           ...settings,
           selectedPrinter: settings.selectedPrinter ? {
               ...settings.selectedPrinter,
-              deviceObj: undefined // Don't save circular structures
+              deviceObj: undefined 
           } : undefined
       };
 
-      // In a real environment with backend, we might call an API here to update secrets
-      // await api.updateSecrets({ SENDIFY_API_KEY: settings.sendifyApiKey });
-
       localStorage.setItem('appSettings', JSON.stringify(settingsToSave));
+      
       onClose();
-      showNotification('success', 'System configuration and secrets saved successfully.');
+      showNotification('success', 'System configuration saved successfully.');
     } catch (err: any) {
       console.error("Save failed", err);
-      showNotification('error', `Failed to save configuration: ${err.message || 'Unknown error'}`);
+      // Ensure we don't print [object Object]
+      const msg = err?.message || (typeof err === 'string' ? err : 'Unknown error');
+      showNotification('error', `Failed to save configuration: ${msg}`);
     }
   };
 
@@ -84,8 +92,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   };
 
   const handleTestConnection = async () => {
-    if (!settings.connectionString) {
-        showNotification('error', 'Please enter a connection string first.');
+    if (!supabaseForm.url || !supabaseForm.key) {
+        showNotification('error', 'Please enter Supabase URL and Key.');
         return;
     }
     
@@ -93,18 +101,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         setIsTesting(true);
         setTestStatus('idle');
         
-        // Simulate async check
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Temporarily create a client for testing
+        const { createClient } = await import('@supabase/supabase-js');
+        const tempClient = createClient(supabaseForm.url, supabaseForm.key);
+
+        // Try a lightweight query
+        const { count, error } = await tempClient
+            .from('Products')
+            .select('*', { count: 'exact', head: true });
+
+        if (error) throw error;
         
-        if (settings.connectionString.length > 5) {
-            setTestStatus('success');
-            showNotification('success', 'Database connection verified.');
-        } else {
-            throw new Error("Invalid connection string format");
-        }
+        setTestStatus('success');
+        showNotification('success', 'Supabase connection verified!');
     } catch (err: any) {
         setTestStatus('error');
-        showNotification('error', `Database connection failed: ${err.message}`);
+        console.error(err);
+        // Ensure we don't print [object Object]
+        const msg = err?.message || (typeof err === 'string' ? err : 'Unknown connection error');
+        showNotification('error', `Connection failed: ${msg}`);
     } finally {
         setIsTesting(false);
     }
@@ -119,21 +134,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       try {
           setIsTestingSendify(true);
           setSendifyTestStatus('idle');
-          
-          // Temporary save to test service logic ensures service uses new key
           localStorage.setItem('appSettings', JSON.stringify(settings));
-          
           const success = await sendifyService.testConnection();
           
-          if (success || settings.sendifyApiKey === 'test') { // Allow 'test' as a mock pass
+          if (success || settings.sendifyApiKey === 'test') {
               setSendifyTestStatus('success');
               showNotification('success', 'Sendify API connection successful.');
           } else {
-              throw new Error("Authentication failed with provided key.");
+              throw new Error("Authentication failed.");
           }
       } catch (err: any) {
           setSendifyTestStatus('error');
-          showNotification('error', `Sendify Connection Failed: ${err.message}`);
+          const msg = err?.message || 'Unknown error';
+          showNotification('error', `Sendify Connection Failed: ${msg}`);
       } finally {
           setIsTestingSendify(false);
       }
@@ -174,31 +187,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 {/* Database Section */}
                 <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
-                        Database
+                        <Database size={16} className="text-indigo-600 dark:text-indigo-400"/> Supabase Configuration
                     </h3>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Connection String</label>
-                        <div className="flex gap-2">
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Project URL</label>
                             <input
-                            type="text"
-                            value={settings.connectionString}
-                            onChange={(e) => {
-                                setSettings({ ...settings, connectionString: e.target.value });
-                                setTestStatus('idle');
-                            }}
-                            className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                            placeholder="Server=myServer;..."
+                                type="text"
+                                value={supabaseForm.url}
+                                onChange={(e) => {
+                                    setSupabaseForm({ ...supabaseForm, url: e.target.value });
+                                    setTestStatus('idle');
+                                }}
+                                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                placeholder="https://xyz.supabase.co"
                             />
-                            <button 
-                                onClick={handleTestConnection}
-                                disabled={isTesting}
-                                className="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"
-                            >
-                                {isTesting ? <Loader2 size={16} className="animate-spin" /> : <Wifi size={16} />}
-                            </button>
                         </div>
-                        {testStatus === 'success' && <div className="mt-2 text-xs text-green-700 dark:text-green-400 flex items-center"><CheckCircle2 size={12} className="mr-1"/> Connected</div>}
-                        {testStatus === 'error' && <div className="mt-2 text-xs text-red-700 dark:text-red-400 flex items-center"><AlertCircle size={12} className="mr-1"/> Connection failed</div>}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Anon Key</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="password"
+                                    value={supabaseForm.key}
+                                    onChange={(e) => {
+                                        setSupabaseForm({ ...supabaseForm, key: e.target.value });
+                                        setTestStatus('idle');
+                                    }}
+                                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                    placeholder="eyJh..."
+                                />
+                                <button 
+                                    onClick={handleTestConnection}
+                                    disabled={isTesting}
+                                    className="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 min-w-[100px] flex justify-center"
+                                >
+                                    {isTesting ? <Loader2 size={16} className="animate-spin" /> : "Test DB"}
+                                </button>
+                            </div>
+                            {testStatus === 'success' && <div className="mt-2 text-xs text-green-700 dark:text-green-400 flex items-center"><CheckCircle2 size={12} className="mr-1"/> Connected to Supabase</div>}
+                            {testStatus === 'error' && <div className="mt-2 text-xs text-red-700 dark:text-red-400 flex items-center"><AlertCircle size={12} className="mr-1"/> Connection failed</div>}
+                        </div>
                     </div>
                 </div>
 
@@ -208,14 +236,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         <Truck size={16} className="text-indigo-600 dark:text-indigo-400"/> Sendify Integration
                     </h3>
                     <div>
-                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">API URL</label>
-                        <input
-                            type="text"
-                            value={settings.sendifyApiUrl}
-                            onChange={(e) => setSettings({ ...settings, sendifyApiUrl: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono mb-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                        />
-                        
                         <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">API Key</label>
                         <div className="flex gap-2">
                             <input
@@ -231,9 +251,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                             <button 
                                 onClick={handleTestSendify}
                                 disabled={isTestingSendify}
-                                className="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"
+                                className="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 min-w-[100px] flex justify-center"
                             >
-                                {isTestingSendify ? <Loader2 size={16} className="animate-spin" /> : "Test"}
+                                {isTestingSendify ? <Loader2 size={16} className="animate-spin" /> : "Test API"}
                             </button>
                         </div>
                         {sendifyTestStatus === 'success' && <div className="mt-2 text-xs text-green-700 dark:text-green-400 flex items-center"><CheckCircle2 size={12} className="mr-1"/> API Authenticated</div>}
@@ -242,7 +262,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 </div>
               </>
           ) : (
-              /* Printers Tab */
+              /* Printers Tab - Unchanged content */
               <div className="space-y-6">
                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg flex items-start gap-3">
                     <AlertCircle className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" size={18} />

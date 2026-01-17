@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Product, Category, Order } from '../types';
 import { inventoryService } from '../services/inventoryService';
 import { orderService } from '../services/orderService';
-import { Edit2, Trash2, Plus, Search, Package, RefreshCw, RotateCcw, XCircle, Clock } from 'lucide-react';
+import { Edit2, Trash2, Plus, Search, Package, RefreshCw, RotateCcw, XCircle, Clock, CalendarDays } from 'lucide-react';
 import ProductFormModal from './ProductFormModal';
 import AsyncImage from './AsyncImage';
 import { useNotification } from '../contexts/NotificationContext';
@@ -43,7 +43,7 @@ const ProductManagement: React.FC = () => {
     if (confirm("Move this product to trash?")) {
       await inventoryService.deleteProduct(id);
       showNotification('success', 'Product moved to trash.');
-      loadData();
+      await loadData(); // Wait for reload to complete
     }
   };
 
@@ -52,7 +52,7 @@ const ProductManagement: React.FC = () => {
       e.stopPropagation();
       await inventoryService.restoreProduct(id);
       showNotification('success', 'Product restored.');
-      loadData();
+      await loadData();
   };
 
   // Permanent Delete
@@ -61,13 +61,13 @@ const ProductManagement: React.FC = () => {
       if (confirm("Permanently delete this product? This action cannot be undone.")) {
           await inventoryService.permanentDeleteProduct(id);
           showNotification('success', 'Product permanently deleted.');
-          loadData();
+          await loadData();
       }
   };
 
   const handleSave = async (product: Partial<Product>) => {
     await inventoryService.saveProduct(product);
-    loadData();
+    await loadData();
   };
 
   const openAddModal = () => {
@@ -109,10 +109,13 @@ const ProductManagement: React.FC = () => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           p.category?.name.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Explicitly check for true. If undefined/null/false, it is NOT deleted.
+    const isDeleted = p.isDeleted === true;
+
     if (viewMode === 'active') {
-        return matchesSearch && !p.isDeleted;
+        return matchesSearch && !isDeleted;
     } else {
-        return matchesSearch && p.isDeleted;
+        return matchesSearch && isDeleted;
     }
   });
 
@@ -179,7 +182,12 @@ const ProductManagement: React.FC = () => {
                      <th className="px-6 py-4">Product Name</th>
                      <th className="px-6 py-4">Category</th>
                      <th className="px-6 py-4">Price</th>
-                     <th className="px-6 py-4 text-center">Stock</th>
+                     {/* Dynamic Header for Active vs Trash */}
+                     {viewMode === 'active' ? (
+                         <th className="px-6 py-4 text-center">Stock</th>
+                     ) : (
+                         <th className="px-6 py-4 text-center">Deleted Date</th>
+                     )}
                      <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                </thead>
@@ -208,11 +216,23 @@ const ProductManagement: React.FC = () => {
                            </span>
                         </td>
                         <td className="px-6 py-3 text-slate-800 dark:text-slate-200">€{p.price.toFixed(2)}</td>
-                        <td className="px-6 py-3 text-center">
-                           <span className={`font-mono text-sm ${p.stockQuantity < 10 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
-                              {p.stockQuantity}
-                           </span>
-                        </td>
+                        
+                        {/* Dynamic Cell for Active vs Trash */}
+                        {viewMode === 'active' ? (
+                            <td className="px-6 py-3 text-center">
+                                <span className={`font-mono text-sm ${p.stockQuantity < 10 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-slate-600 dark:text-slate-400'}`}>
+                                    {p.stockQuantity}
+                                </span>
+                            </td>
+                        ) : (
+                            <td className="px-6 py-3 text-center">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1" title={p.deletedAt || ''}>
+                                    <CalendarDays size={12} />
+                                    {p.deletedAt ? new Date(p.deletedAt).toLocaleDateString() : 'Unknown'}
+                                </span>
+                            </td>
+                        )}
+
                         <td className="px-6 py-3 text-right">
                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                               {viewMode === 'active' ? (

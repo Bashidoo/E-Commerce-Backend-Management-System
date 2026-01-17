@@ -31,7 +31,9 @@ export interface Product {
   reviewCount: number;
   categoryId: number;
   category?: Category;
-  isDeleted?: boolean; // New field for soft delete
+  // Soft Delete fields
+  isDeleted?: boolean; 
+  deletedAt?: string | null; // ISO Date string
 }
 
 export interface OrderItem {

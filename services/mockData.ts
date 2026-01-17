@@ -27,7 +27,9 @@ export const mockProducts: Product[] = [
     rating: 4.8,
     reviewCount: 120,
     categoryId: 1,
-    category: mockCategories[0]
+    category: mockCategories[0],
+    isDeleted: false,
+    deletedAt: null
   },
   {
     id: 102,
@@ -44,7 +46,9 @@ export const mockProducts: Product[] = [
     rating: 4.5,
     reviewCount: 85,
     categoryId: 2,
-    category: mockCategories[1]
+    category: mockCategories[1],
+    isDeleted: false,
+    deletedAt: null
   },
   {
     id: 103,
@@ -60,7 +64,9 @@ export const mockProducts: Product[] = [
     rating: 4.9,
     reviewCount: 200,
     categoryId: 1,
-    category: mockCategories[0]
+    category: mockCategories[0],
+    isDeleted: false,
+    deletedAt: null
   }
 ];
 
