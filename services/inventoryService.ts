@@ -1,151 +1,164 @@
 import { Product, Category } from '../types';
-import { mockProducts, mockCategories } from './mockData';
 import { getSupabase } from '../lib/supabaseClient';
-import { productService } from './productService';
 
 class InventoryService {
-  // Use mockProducts and ensure deep copy to prevent reference issues
-  // This internal state is mostly for mock mode now
-  private products: Product[] = mockProducts.map(p => ({ 
-    ...p, 
-    isDeleted: p.isDeleted ?? false 
-  }));
   
-  private categories: Category[] = [...mockCategories];
+  // Helper to ensure we have a client or throw
+  private getClient() {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Database not configured. Please check settings.");
+    return supabase;
+  }
 
-  // Async get all products (Active and Soft Deleted)
   async getAllProducts(): Promise<Product[]> {
-    // Priority: Check Supabase
-    if (getSupabase()) {
-        try {
-            return await productService.getProducts();
-        } catch (e) {
-            console.error("Failed to fetch from Supabase, falling back to mock data", e);
-            // Fallback continues below
-        }
+    const supabase = getSupabase();
+    if (!supabase) return [];
+
+    // Fetch products with Category join
+    const { data, error } = await supabase
+      .from('Products')
+      .select(`
+        *,
+        Category:Categories(*)
+      `)
+      .order('Id', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching products:", error);
+      return [];
     }
 
-    // Mock Implementation
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([...this.products]);
-      }, 500);
-    });
+    return (data || []).map((item: any) => this.mapDBProductToDomain(item));
   }
 
-  // Async get all categories
   async getAllCategories(): Promise<Category[]> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([...this.categories]);
-      }, 300);
-    });
-  }
-
-  // Create or Update Product
-  async saveProduct(product: Partial<Product>): Promise<Product> {
     const supabase = getSupabase();
-    
-    // NOTE: For this specific task, we only implemented READ in productService.
-    // Full CRUD with Supabase would be implemented in productService similarly.
-    // For now, we update local mock state so the UI feels responsive even if DB write isn't fully wired in this task.
-    
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        // Validation Logic
-        if (!product.name || !product.price || product.price < 0) {
-          reject(new Error("Invalid product data"));
-          return;
-        }
+    if (!supabase) return [];
 
-        const category = this.categories.find(c => c.id === product.categoryId);
+    const { data, error } = await supabase
+      .from('Categories')
+      .select('*')
+      .order('Name', { ascending: true });
 
-        if (product.id) {
-          // Update
-          const index = this.products.findIndex(p => p.id === product.id);
-          if (index !== -1) {
-            const existingProduct = this.products[index];
-            const updated = { 
-                ...existingProduct, 
-                ...product, 
-                // Preserve critical flags if not provided in update
-                isDeleted: existingProduct.isDeleted,
-                deletedAt: existingProduct.deletedAt,
-                category 
-            } as Product;
-            
-            // Immutable update using map
-            this.products = this.products.map(p => p.id === product.id ? updated : p);
-            resolve(updated);
-          } else {
-            reject(new Error("Product not found"));
-          }
-        } else {
-          // Create
-          const newProduct = {
-            ...product,
-            id: (this.products.length > 0 ? Math.max(...this.products.map(p => p.id)) : 100) + 1,
-            category,
-            reviewCount: 0,
-            rating: 0,
-            isDeleted: false, // Ensure new products are active
-            deletedAt: null
-          } as Product;
-          this.products = [...this.products, newProduct];
-          resolve(newProduct);
-        }
-      }, 600); // Simulate network/DB latency
-    });
+    if (error) {
+      console.error("Error fetching categories:", error);
+      return [];
+    }
+
+    return (data || []).map((c: any) => ({
+      id: c.Id,
+      name: c.Name
+    }));
   }
 
-  // Soft Delete Product (Move to Trash)
+  async saveProduct(product: Partial<Product>): Promise<Product> {
+    const supabase = this.getClient();
+
+    // Map Domain -> DB
+    const dbPayload: any = {
+      Name: product.name,
+      Description: product.description,
+      Price: product.price,
+      StockQuantity: product.stockQuantity,
+      ImageUrl: product.imageUrl,
+      CategoryId: product.categoryId,
+      Gender: product.gender,
+      InspiredBy: product.inspiredBy,
+      // Default fields if new
+      IsDeleted: false,
+      ReviewCount: product.reviewCount || 0,
+      Rating: product.rating || 0
+    };
+
+    let result: any;
+    
+    if (product.id) {
+      // Update
+      const { data, error } = await supabase
+        .from('Products')
+        .update(dbPayload)
+        .eq('Id', product.id)
+        .select(`*, Category:Categories(*)`)
+        .single();
+
+      if (error) throw error;
+      result = data;
+    } else {
+      // Create
+      const { data, error } = await supabase
+        .from('Products')
+        .insert(dbPayload)
+        .select(`*, Category:Categories(*)`)
+        .single();
+
+      if (error) throw error;
+      result = data;
+    }
+
+    return this.mapDBProductToDomain(result);
+  }
+
   async deleteProduct(id: number): Promise<void> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // Use map to immutably update the specific product
-        this.products = this.products.map(p => {
-          if (p.id === id) {
-            return {
-              ...p,
-              isDeleted: true,
-              deletedAt: new Date().toISOString()
-            };
-          }
-          return p;
-        });
-        resolve();
-      }, 400);
-    });
+    const supabase = this.getClient();
+    const { error } = await supabase
+      .from('Products')
+      .update({ IsDeleted: true, DeletedAt: new Date().toISOString() })
+      .eq('Id', id);
+    
+    if (error) throw error;
   }
 
-  // Restore Product from Trash
   async restoreProduct(id: number): Promise<void> {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // Use map to immutably update the specific product
-        this.products = this.products.map(p => {
-          if (p.id === id) {
-            return {
-              ...p,
-              isDeleted: false,
-              deletedAt: null
-            };
-          }
-          return p;
-        });
-        resolve();
-      }, 400);
-    });
+    const supabase = this.getClient();
+    const { error } = await supabase
+      .from('Products')
+      .update({ IsDeleted: false, DeletedAt: null })
+      .eq('Id', id);
+      
+    if (error) throw error;
   }
 
-  // Permanent Delete
   async permanentDeleteProduct(id: number): Promise<void> {
-      return new Promise((resolve) => {
-          setTimeout(() => {
-              this.products = this.products.filter(p => p.id !== id);
-              resolve();
-          }, 400);
-      });
+    const supabase = this.getClient();
+    const { error } = await supabase
+      .from('Products')
+      .delete()
+      .eq('Id', id);
+      
+    if (error) throw error;
+  }
+
+  // --- Mappers ---
+
+  private mapDBProductToDomain(dbItem: any): Product {
+    // Handle Category join which returns an object or array
+    let category: Category | undefined;
+    if (dbItem.Category) {
+       // If it's an array (sometimes joins return arrays), take first
+       const catData = Array.isArray(dbItem.Category) ? dbItem.Category[0] : dbItem.Category;
+       if (catData) {
+           category = { id: catData.Id, name: catData.Name };
+       }
+    }
+
+    return {
+      id: dbItem.Id,
+      name: dbItem.Name,
+      description: dbItem.Description || '',
+      imageUrl: dbItem.ImageUrl,
+      price: dbItem.Price,
+      stockQuantity: dbItem.StockQuantity,
+      inspiredBy: dbItem.InspiredBy || '',
+      gender: dbItem.Gender,
+      isOnSale: false, // Not in DB schema provided
+      isNew: false, // Not in DB schema provided
+      rating: dbItem.Rating || 0,
+      reviewCount: dbItem.ReviewCount || 0,
+      categoryId: dbItem.CategoryId,
+      category: category,
+      isDeleted: dbItem.IsDeleted,
+      deletedAt: dbItem.DeletedAt
+    };
   }
 }
 

@@ -6,10 +6,13 @@ import OrderDetailsPanel from './components/OrderDetailsPanel';
 import SettingsModal from './components/SettingsModal';
 import ProductManagement from './components/ProductManagement';
 import SupportDashboard from './components/SupportDashboard';
-import { Search, Settings, RefreshCw, LayoutDashboard, Package, LifeBuoy, AlertCircle, Moon, Sun } from 'lucide-react';
+import LoginScreen from './components/LoginScreen';
+import { Search, Settings, RefreshCw, LayoutDashboard, Package, LifeBuoy, AlertCircle, Moon, Sun, LogOut } from 'lucide-react';
 import { NotificationContainer } from './components/Notifications';
 import { useTheme } from './contexts/ThemeContext';
 import { useSettings } from './contexts/SettingsContext';
+import { useAuth } from './contexts/AuthContext';
+import { useSafeFetch } from './hooks/useSafeFetch';
 
 type ViewMode = 'ORDERS' | 'INVENTORY' | 'SUPPORT';
 
@@ -17,6 +20,10 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('ORDERS');
   const { theme, toggleTheme } = useTheme();
   const { isConfigured } = useSettings();
+  const { session, loading: authLoading, signOut } = useAuth();
+  
+  // Rate Limiter: Max 15 requests per minute
+  const { safeExecute, isLocked } = useSafeFetch({ limit: 15, windowMs: 60000 });
   
   // Order State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -32,10 +39,16 @@ const App: React.FC = () => {
   const [labelFilter, setLabelFilter] = useState<string>('All');
 
   const fetchOrders = async () => {
+    if (!session) return;
     setLoading(true);
     try {
-      const data = await orderService.getAllOrders();
-      setOrders(data);
+      // Wrap the expensive API call in the safety breaker
+      const data = await safeExecute(async () => await orderService.getAllOrders());
+      
+      // If data is null, it means rate limit hit
+      if (data) {
+        setOrders(data);
+      }
     } catch (err) {
       console.error("Failed to fetch orders", err);
     } finally {
@@ -44,13 +57,16 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchOrders();
+    // Only fetch if we have a session
+    if (session) {
+        fetchOrders();
+    }
     
     // Force open settings if Supabase isn't configured
     if (!isConfigured) {
         setIsSettingsOpen(true);
     }
-  }, [isConfigured]);
+  }, [isConfigured, session]);
 
   const handleOrderUpdate = (updatedOrder: Order) => {
     setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
@@ -79,16 +95,56 @@ const App: React.FC = () => {
     });
   }, [orders, searchQuery, statusFilter, labelFilter]);
 
+  // 1. Show Settings if not configured
+  if (!isConfigured) {
+      return (
+          <div className="h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+              <NotificationContainer />
+              <div className="text-center max-w-md">
+                <AlertCircle size={48} className="mx-auto text-indigo-500 mb-4" />
+                <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Welcome to OrderFlow</h1>
+                <p className="text-slate-500 dark:text-slate-400 mb-6">To get started, please configure your Supabase connection.</p>
+                <button 
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors"
+                >
+                    Setup Database
+                </button>
+              </div>
+              <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+          </div>
+      );
+  }
+
+  // 2. Show Loading while checking auth
+  if (authLoading) {
+      return (
+          <div className="h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 text-slate-500">
+              <RefreshCw className="animate-spin mr-2" /> Loading...
+          </div>
+      );
+  }
+
+  // 3. Show Login if not authenticated
+  if (!session) {
+      return (
+        <>
+            <NotificationContainer />
+            <LoginScreen />
+            <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+            <div className="fixed bottom-4 right-4 z-50">
+                <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-slate-800 text-slate-400 rounded-full hover:text-white shadow-lg">
+                    <Settings size={20} />
+                </button>
+            </div>
+        </>
+      );
+  }
+
+  // 4. Main App
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans relative transition-colors duration-300">
       <NotificationContainer />
-      
-      {/* Configuration Banner */}
-      {!isConfigured && (
-          <div className="absolute top-0 left-0 right-0 z-[60] bg-amber-500 text-white text-xs text-center py-1 font-bold">
-              Database not configured. Please open settings to connect Supabase.
-          </div>
-      )}
       
       {/* Mobile Header */}
       <div className="md:hidden h-16 bg-black text-white flex items-center justify-between px-4 shrink-0 z-30">
@@ -106,7 +162,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Sidebar Navigation (Desktop) / Bottom Nav (Mobile) */}
+      {/* Sidebar Navigation */}
       <aside className="
         md:w-64 md:flex md:flex-col md:shrink-0 md:relative transition-all duration-300
         fixed bottom-0 left-0 right-0 z-50 flex-row h-16 items-center justify-around md:justify-start
@@ -197,6 +253,14 @@ const App: React.FC = () => {
              <Settings size={20} />
              <span>System Settings</span>
            </button>
+
+           <button 
+             onClick={signOut}
+             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+           >
+             <LogOut size={20} />
+             <span>Sign Out</span>
+           </button>
         </div>
       </aside>
 
@@ -212,7 +276,6 @@ const App: React.FC = () => {
           <main className="flex-1 flex overflow-hidden relative">
             
             {/* List View - Hidden on mobile if detail is open */}
-            {/* Added padding here instead of on main to avoid gaps when detail view is open */}
             <div className={`
                 flex-1 flex-col w-full md:min-w-[400px] transition-all duration-300 p-4 md:p-6 h-full overflow-hidden
                 ${selectedOrder ? 'hidden md:flex' : 'flex'}
@@ -244,12 +307,11 @@ const App: React.FC = () => {
               </div>
 
               {/* Grid */}
-              <OrderTable orders={filteredOrders} selectedOrderId={selectedOrder?.id || null} onSelectOrder={setSelectedOrder} />
+              <OrderTable orders={filteredOrders} selectedOrderId={selectedOrder?.id || null} onSelectOrder={setSelectedOrder} isLocked={isLocked} />
               <div className="mt-2 text-xs text-slate-400 text-center md:text-left shrink-0">Showing {filteredOrders.length} orders</div>
             </div>
 
             {/* Details Panel - Full screen on mobile, panel on desktop */}
-            {/* Used absolute inset-0 for mobile to ensure full coverage without parent padding interference */}
             <div className={`
                 md:w-[450px] shrink-0 flex flex-col bg-white dark:bg-slate-900
                 absolute inset-0 md:static md:h-full z-40 transition-transform duration-300 md:p-6 md:pl-0

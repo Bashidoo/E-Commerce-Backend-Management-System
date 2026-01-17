@@ -7,6 +7,7 @@ export interface User {
   lastName: string;
   address: string;
   role: string;
+  authId?: string; // Links to Supabase Auth UUID
 }
 
 export interface Category {

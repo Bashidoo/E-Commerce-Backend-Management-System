@@ -1,40 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { SupportTicket, User, Order } from '../types';
 import { supportService } from '../services/supportService';
-import { mockOrders, users } from '../services/mockData';
+import { orderService } from '../services/orderService';
 import { LifeBuoy, Plus, CheckCircle2, Circle, AlertCircle, Search, RefreshCw } from 'lucide-react';
 import SupportTicketModal from './SupportTicketModal';
+// Removed mock imports
 
 const SupportDashboard: React.FC = () => {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState('All');
+  
+  // Data for modal
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
 
-  const loadTickets = async () => {
+  const loadData = async () => {
     setLoading(true);
-    const data = await supportService.getAllTickets();
-    // Hydrate users just in case (simulating join)
-    const hydratedData = data.map(t => ({
-        ...t,
-        user: users.find(u => u.id === t.userId)
-    }));
-    setTickets(hydratedData);
-    setLoading(false);
+    try {
+        const [ticketsData, ordersData] = await Promise.all([
+            supportService.getAllTickets(),
+            orderService.getAllOrders()
+        ]);
+        setTickets(ticketsData);
+        setAvailableOrders(ordersData);
+        
+        // Extract unique users from orders for the dropdown (simple approach)
+        const uniqueUsersMap = new Map();
+        ordersData.forEach(o => {
+            if (o.user) uniqueUsersMap.set(o.user.id, o.user);
+        });
+        setAvailableUsers(Array.from(uniqueUsersMap.values()));
+
+    } catch (error) {
+        console.error("Failed to load support dashboard data", error);
+    } finally {
+        setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadTickets();
+    loadData();
   }, []);
 
   const handleResolve = async (id: number) => {
     await supportService.resolveTicket(id);
-    loadTickets();
+    loadData();
   };
 
   const handleCreate = async (ticket: Partial<SupportTicket>) => {
     await supportService.createTicket(ticket);
-    loadTickets();
+    loadData();
   };
 
   const getPriorityColor = (p: string) => {
@@ -76,7 +93,7 @@ const SupportDashboard: React.FC = () => {
          </div>
          <div className="flex items-center gap-2">
             <button 
-                onClick={loadTickets} 
+                onClick={loadData} 
                 className="p-2 text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-colors"
                 title="Refresh Tickets"
             >
@@ -156,8 +173,8 @@ const SupportDashboard: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleCreate}
-        users={users}
-        orders={mockOrders}
+        users={availableUsers}
+        orders={availableOrders}
       />
     </div>
   );

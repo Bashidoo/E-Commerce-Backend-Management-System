@@ -1,14 +1,15 @@
 import React from 'react';
 import { Order } from '../types';
-import { Package, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Package, CheckCircle2, AlertCircle, Clock, ShieldAlert } from 'lucide-react';
 
 interface OrderTableProps {
   orders: Order[];
   selectedOrderId: number | null;
   onSelectOrder: (order: Order) => void;
+  isLocked?: boolean; // New prop to show safety lock status
 }
 
-const OrderTable: React.FC<OrderTableProps> = ({ orders, selectedOrderId, onSelectOrder }) => {
+const OrderTable: React.FC<OrderTableProps> = ({ orders, selectedOrderId, onSelectOrder, isLocked }) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
@@ -28,6 +29,18 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, selectedOrderId, onSele
       default: return <Package size={14} className="mr-1.5" />;
     }
   };
+
+  if (isLocked) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800 rounded-xl">
+        <ShieldAlert size={48} className="text-red-600 dark:text-red-400 mb-4" />
+        <h3 className="text-lg font-bold text-red-700 dark:text-red-400">Security Lock Engaged</h3>
+        <p className="text-sm text-red-600 dark:text-red-300 max-w-md mt-2">
+          Your browser is making too many requests. We have paused data fetching to protect your system. Please refresh the page in a minute.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm flex flex-col h-full transition-colors">
