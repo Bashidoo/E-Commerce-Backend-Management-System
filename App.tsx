@@ -10,7 +10,6 @@ import LoginScreen from './components/LoginScreen';
 import { Search, Settings, RefreshCw, LayoutDashboard, Package, LifeBuoy, AlertCircle, Moon, Sun, LogOut } from 'lucide-react';
 import { NotificationContainer } from './components/Notifications';
 import { useTheme } from './contexts/ThemeContext';
-import { useSettings } from './contexts/SettingsContext';
 import { useAuth } from './contexts/AuthContext';
 import { useSafeFetch } from './hooks/useSafeFetch';
 
@@ -19,7 +18,6 @@ type ViewMode = 'ORDERS' | 'INVENTORY' | 'SUPPORT';
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('ORDERS');
   const { theme, toggleTheme } = useTheme();
-  const { isConfigured } = useSettings();
   const { session, loading: authLoading, signOut } = useAuth();
   
   // Rate Limiter: Max 15 requests per minute
@@ -61,12 +59,7 @@ const App: React.FC = () => {
     if (session) {
         fetchOrders();
     }
-    
-    // Force open settings if Supabase isn't configured
-    if (!isConfigured) {
-        setIsSettingsOpen(true);
-    }
-  }, [isConfigured, session]);
+  }, [session]);
 
   const handleOrderUpdate = (updatedOrder: Order) => {
     setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
@@ -95,28 +88,7 @@ const App: React.FC = () => {
     });
   }, [orders, searchQuery, statusFilter, labelFilter]);
 
-  // 1. Show Settings if not configured
-  if (!isConfigured) {
-      return (
-          <div className="h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
-              <NotificationContainer />
-              <div className="text-center max-w-md">
-                <AlertCircle size={48} className="mx-auto text-indigo-500 mb-4" />
-                <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Welcome to OrderFlow</h1>
-                <p className="text-slate-500 dark:text-slate-400 mb-6">To get started, please configure your Supabase connection.</p>
-                <button 
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700 transition-colors"
-                >
-                    Setup Database
-                </button>
-              </div>
-              <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-          </div>
-      );
-  }
-
-  // 2. Show Loading while checking auth
+  // 1. Show Loading while checking auth
   if (authLoading) {
       return (
           <div className="h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 text-slate-500">
@@ -125,7 +97,7 @@ const App: React.FC = () => {
       );
   }
 
-  // 3. Show Login if not authenticated
+  // 2. Show Login if not authenticated
   if (!session) {
       return (
         <>
@@ -141,7 +113,7 @@ const App: React.FC = () => {
       );
   }
 
-  // 4. Main App
+  // 3. Main App
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans relative transition-colors duration-300">
       <NotificationContainer />

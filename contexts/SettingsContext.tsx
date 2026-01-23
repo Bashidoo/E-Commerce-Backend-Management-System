@@ -1,63 +1,25 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getSupabase, resetSupabaseClient, DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY } from '../lib/supabaseClient';
+import React, { createContext, useContext, ReactNode } from 'react';
+import { DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY } from '../lib/supabaseClient';
 
 interface SettingsContextType {
   supabaseUrl: string;
   supabaseKey: string;
   isConfigured: boolean;
-  saveSettings: (url: string, key: string) => void;
-  clearSettings: () => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [supabaseUrl, setSupabaseUrl] = useState('');
-  const [supabaseKey, setSupabaseKey] = useState('');
-  const [isConfigured, setIsConfigured] = useState(false);
-
-  useEffect(() => {
-    // Load initial settings or fall back to defaults
-    const storedUrl = localStorage.getItem('supabase_url') || DEFAULT_SUPABASE_URL;
-    const storedKey = localStorage.getItem('supabase_key') || DEFAULT_SUPABASE_KEY;
-    
-    setSupabaseUrl(storedUrl);
-    setSupabaseKey(storedKey);
-    // Since we have defaults, we are considered configured immediately
-    setIsConfigured(!!storedUrl && !!storedKey);
-  }, []);
-
-  const saveSettings = (url: string, key: string) => {
-    localStorage.setItem('supabase_url', url);
-    localStorage.setItem('supabase_key', key);
-    setSupabaseUrl(url);
-    setSupabaseKey(key);
-    setIsConfigured(!!url && !!key);
-    
-    // Reset the singleton instance so next call uses new keys
-    resetSupabaseClient();
-    
-    // Optional: Hard reload to ensure clean state for all services
-    window.location.reload();
-  };
-
-  const clearSettings = () => {
-    localStorage.removeItem('supabase_url');
-    localStorage.removeItem('supabase_key');
-    // Revert to defaults instead of clearing completely to keep app usable
-    setSupabaseUrl(DEFAULT_SUPABASE_URL);
-    setSupabaseKey(DEFAULT_SUPABASE_KEY);
-    setIsConfigured(true);
-    resetSupabaseClient();
-  };
+  // We now strictly use the constants from supabaseClient
+  const supabaseUrl = DEFAULT_SUPABASE_URL;
+  const supabaseKey = DEFAULT_SUPABASE_KEY;
+  const isConfigured = true; // Always configured with hardcoded defaults
 
   return (
     <SettingsContext.Provider value={{ 
       supabaseUrl, 
       supabaseKey, 
-      isConfigured, 
-      saveSettings, 
-      clearSettings 
+      isConfigured
     }}>
       {children}
     </SettingsContext.Provider>
