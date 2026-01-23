@@ -1,7 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export const DEFAULT_SUPABASE_URL = 'https://khfzxeesnojmfmwahkxg.supabase.co';
-export const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZnp4ZWVzbm9qbWZtd2Foa3hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMDM2NDQsImV4cCI6MjA4Mzg3OTY0NH0.OemAGDSn7mJfHy1iZmpDGf_T_4-lMRZauWegRvqc7qA';
+// Prioritize Environment Variables (GitHub Secrets / .env)
+// Fallback to the hardcoded values provided for immediate functionality
+const env = (import.meta as any).env || {};
+
+export const DEFAULT_SUPABASE_URL = env.VITE_SUPABASE_URL || 'https://khfzxeesnojmfmwahkxg.supabase.co';
+export const DEFAULT_SUPABASE_KEY = env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZnp4ZWVzbm9qbWZtd2Foa3hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMDM2NDQsImV4cCI6MjA4Mzg3OTY0NH0.OemAGDSn7mJfHy1iZmpDGf_T_4-lMRZauWegRvqc7qA';
 
 // Helper to get credentials safely
 const getCredentials = () => {
@@ -21,8 +25,6 @@ export const getSupabase = (): SupabaseClient | null => {
   }
 
   // If instance exists and keys haven't changed (simplified check), return it
-  // In a real scenario, we might want to check if the url/key match the instance's config,
-  // but usually a hard reload is triggered on change, so simple persistence is fine.
   if (!supabaseInstance) {
     try {
         supabaseInstance = createClient(url, key);

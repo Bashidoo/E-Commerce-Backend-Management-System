@@ -23,6 +23,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     
     setSupabaseUrl(storedUrl);
     setSupabaseKey(storedKey);
+    // Since we have defaults, we are considered configured immediately
     setIsConfigured(!!storedUrl && !!storedKey);
   }, []);
 
