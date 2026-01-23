@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getSupabase, resetSupabaseClient } from '../lib/supabaseClient';
+import { getSupabase, resetSupabaseClient, DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY } from '../lib/supabaseClient';
 
 interface SettingsContextType {
   supabaseUrl: string;
@@ -17,9 +17,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [isConfigured, setIsConfigured] = useState(false);
 
   useEffect(() => {
-    // Load initial settings
-    const storedUrl = localStorage.getItem('supabase_url') || '';
-    const storedKey = localStorage.getItem('supabase_key') || '';
+    // Load initial settings or fall back to defaults
+    const storedUrl = localStorage.getItem('supabase_url') || DEFAULT_SUPABASE_URL;
+    const storedKey = localStorage.getItem('supabase_key') || DEFAULT_SUPABASE_KEY;
     
     setSupabaseUrl(storedUrl);
     setSupabaseKey(storedKey);
@@ -43,9 +43,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const clearSettings = () => {
     localStorage.removeItem('supabase_url');
     localStorage.removeItem('supabase_key');
-    setSupabaseUrl('');
-    setSupabaseKey('');
-    setIsConfigured(false);
+    // Revert to defaults instead of clearing completely to keep app usable
+    setSupabaseUrl(DEFAULT_SUPABASE_URL);
+    setSupabaseKey(DEFAULT_SUPABASE_KEY);
+    setIsConfigured(true);
     resetSupabaseClient();
   };
 

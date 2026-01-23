@@ -1,9 +1,12 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+export const DEFAULT_SUPABASE_URL = 'https://khfzxeesnojmfmwahkxg.supabase.co';
+export const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoZnp4ZWVzbm9qbWZtd2Foa3hnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMDM2NDQsImV4cCI6MjA4Mzg3OTY0NH0.OemAGDSn7mJfHy1iZmpDGf_T_4-lMRZauWegRvqc7qA';
+
 // Helper to get credentials safely
 const getCredentials = () => {
-  const url = localStorage.getItem('supabase_url');
-  const key = localStorage.getItem('supabase_key');
+  const url = localStorage.getItem('supabase_url') || DEFAULT_SUPABASE_URL;
+  const key = localStorage.getItem('supabase_key') || DEFAULT_SUPABASE_KEY;
   return { url, key };
 };
 
