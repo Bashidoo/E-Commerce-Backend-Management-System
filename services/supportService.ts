@@ -13,36 +13,21 @@ class SupportService {
     const supabase = getSupabase();
     if (!supabase) return [];
 
-    // Try standard snake_case table first
-    const { data, error } = await supabase
-      .from('support_tickets')
-      .select(`
-        *,
-        users (*)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.warn("SupportService: Failed to fetch from 'support_tickets', trying legacy 'SupportTickets'...", error.message);
-      return this.getAllTicketsLegacy();
-    }
-
-    return (data || []).map((t: any) => this.mapDBTicketToDomain(t));
-  }
-
-  private async getAllTicketsLegacy(): Promise<SupportTicket[]> {
-    const supabase = getSupabase();
-    if (!supabase) return [];
-    
+    // Query "SupportTickets" (PascalCase)
+    // Changed sort to 'Id' to ensure safety if CreatedAt column is missing or named differently
     const { data, error } = await supabase
       .from('SupportTickets')
-      .select(`*, User:Users(*)`)
-      .order('CreatedAt', { ascending: false });
+      .select(`
+        *,
+        Users (*)
+      `)
+      .order('Id', { ascending: false });
 
     if (error) {
-        console.error("SupportService Legacy Fetch Error:", error);
-        return [];
+      console.error("SupportService Fetch Error:", error);
+      return [];
     }
+
     return (data || []).map((t: any) => this.mapDBTicketToDomain(t));
   }
 
@@ -50,44 +35,27 @@ class SupportService {
     const supabase = this.getClient();
     const generatedNum = `TKT-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`;
 
-    // Try standard snake_case insert
     const payload = {
-      user_id: ticket.userId,
-      subject: ticket.subject,
-      description: ticket.description,
-      status: 'Open',
-      priority: ticket.priority,
-      order_id: ticket.orderId,
-      order_number: ticket.orderNumber,
-      ticket_number: generatedNum
+        UserId: ticket.userId,
+        Subject: ticket.subject,
+        Description: ticket.description,
+        Status: 'Open',
+        Priority: ticket.priority,
+        OrderId: ticket.orderId,
+        OrderNumber: ticket.orderNumber,
+        TicketNumber: generatedNum,
+        CreatedAt: new Date().toISOString()
     };
 
     const { data, error } = await supabase
-      .from('support_tickets')
-      .insert(payload)
-      .select(`*, users(*)`)
-      .single();
-
+        .from('SupportTickets')
+        .insert(payload)
+        .select(`*, Users(*)`)
+        .single();
+        
     if (error) {
-        // Legacy Fallback
-        const legacyPayload = {
-            UserId: ticket.userId,
-            Subject: ticket.subject,
-            Description: ticket.description,
-            Status: 'Open',
-            Priority: ticket.priority,
-            OrderId: ticket.orderId,
-            OrderNumber: ticket.orderNumber,
-            TicketNumber: generatedNum
-        };
-        const { data: legacyData, error: legacyError } = await supabase
-            .from('SupportTickets')
-            .insert(legacyPayload)
-            .select(`*, User:Users(*)`)
-            .single();
-            
-        if (legacyError) throw legacyError;
-        return this.mapDBTicketToDomain(legacyData);
+        console.error("SupportService Create Error:", error);
+        throw error;
     }
 
     return this.mapDBTicketToDomain(data);
@@ -96,66 +64,54 @@ class SupportService {
   async resolveTicket(ticketId: number): Promise<SupportTicket> {
     const supabase = this.getClient();
     const updates = { 
-        status: 'Resolved',
-        last_updated: new Date().toISOString()
+        Status: 'Resolved',
+        LastUpdated: new Date().toISOString()
     };
 
     const { data, error } = await supabase
-      .from('support_tickets')
-      .update(updates)
-      .eq('id', ticketId)
-      .select(`*, users(*)`)
-      .single();
+        .from('SupportTickets')
+        .update(updates)
+        .eq('Id', ticketId)
+        .select(`*, Users(*)`)
+        .single();
 
     if (error) {
-        // Legacy Fallback
-        const legacyUpdates = { 
-            Status: 'Resolved',
-            LastUpdated: new Date().toISOString()
-        };
-        const { data: legacyData, error: legacyError } = await supabase
-            .from('SupportTickets')
-            .update(legacyUpdates)
-            .eq('Id', ticketId)
-            .select(`*, User:Users(*)`)
-            .single();
-
-        if (legacyError) throw legacyError;
-        return this.mapDBTicketToDomain(legacyData);
+        console.error("SupportService Resolve Error:", error);
+        throw error;
     }
 
     return this.mapDBTicketToDomain(data);
   }
 
-  // --- Mappers ---
   private mapDBTicketToDomain(dbItem: any): SupportTicket {
-    const rawUser = dbItem.users || dbItem.User || dbItem.user;
+    // Handle potential casing issues in FK relation result
+    const rawUser = dbItem.Users || dbItem.users;
     let user: User | undefined;
     
     if (rawUser) {
         user = {
-            id: rawUser.id || rawUser.Id,
-            email: rawUser.email || rawUser.Email,
-            firstName: rawUser.first_name || rawUser.FirstName,
-            lastName: rawUser.last_name || rawUser.LastName,
-            address: rawUser.address || rawUser.Address,
-            role: rawUser.role || rawUser.Role
+            id: rawUser.Id,
+            email: rawUser.Email,
+            firstName: rawUser.FirstName,
+            lastName: rawUser.LastName,
+            address: rawUser.Address,
+            role: rawUser.Role
         };
     }
 
     return {
-      id: dbItem.id || dbItem.Id,
-      userId: dbItem.user_id || dbItem.UserId,
+      id: dbItem.Id,
+      userId: dbItem.UserId,
       user,
-      ticketNumber: dbItem.ticket_number || dbItem.TicketNumber,
-      subject: dbItem.subject || dbItem.Subject,
-      description: dbItem.description || dbItem.Description,
-      status: dbItem.status || dbItem.Status,
-      priority: dbItem.priority || dbItem.Priority,
-      orderId: dbItem.order_id || dbItem.OrderId,
-      orderNumber: dbItem.order_number || dbItem.OrderNumber,
-      createdAt: dbItem.created_at || dbItem.CreatedAt,
-      lastUpdated: dbItem.last_updated || dbItem.LastUpdated
+      ticketNumber: dbItem.TicketNumber,
+      subject: dbItem.Subject,
+      description: dbItem.Description,
+      status: dbItem.Status,
+      priority: dbItem.Priority,
+      orderId: dbItem.OrderId,
+      orderNumber: dbItem.OrderNumber,
+      createdAt: dbItem.CreatedAt,
+      lastUpdated: dbItem.LastUpdated
     };
   }
 }

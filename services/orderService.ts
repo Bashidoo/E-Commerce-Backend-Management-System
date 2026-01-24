@@ -13,26 +13,21 @@ class OrderService {
     const supabase = getSupabase();
     if (!supabase) return [];
 
+    console.log("Fetching Orders... (v2 - Strict Sort)"); // Debug log to confirm code update
+
     try {
-      // Production: Use lowercase table names and standard joins
-      // We attempt to fetch orders with users and items.
-      // Note: If RLS is enabled on Supabase, ensure 'select' policy is active for Authenticated users.
+      // Query "Orders" (PascalCase) and strictly sort by OrderDate
       const { data, error } = await supabase
-        .from('orders')
+        .from('Orders')
         .select(`
             *,
-            users (*),
-            order_items (*, products (*))
+            Users (*),
+            OrderItems (*, Products (*))
         `)
-        .order('order_date', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false }); // Fallback sort
+        .order('OrderDate', { ascending: false, nullsFirst: false });
 
       if (error) {
         console.error("Supabase Error (Orders):", error);
-        // Fallback: Try PascalCase if lowercase failed (Legacy DB compatibility)
-        if (error.code === '42P01') { // undefined_table
-            return this.getAllOrdersLegacy();
-        }
         return [];
       }
 
@@ -43,27 +38,19 @@ class OrderService {
     }
   }
 
-  // Fallback for Legacy Tables (PascalCase)
-  private async getAllOrdersLegacy(): Promise<Order[]> {
-    const supabase = getSupabase();
-    if (!supabase) return [];
-    const { data } = await supabase.from('Orders').select(`*, User:Users(*), OrderItems:OrderItems(*, Product:Products(*))`);
-    return (data || []).map(o => this.mapToDomain(o));
-  }
-
   async getOrderById(id: number): Promise<Order | null> {
     const supabase = getSupabase();
     if (!supabase) return null;
 
     try {
         const { data, error } = await supabase
-        .from('orders')
+        .from('Orders')
         .select(`
             *,
-            users (*),
-            order_items (*, products (*))
+            Users (*),
+            OrderItems (*, Products (*))
         `)
-        .eq('id', id)
+        .eq('Id', id)
         .single();
         
         if (error) return null;
@@ -76,113 +63,91 @@ class OrderService {
   async updateOrderLabelStatus(orderId: number, isPrinted: boolean, labelUrl?: string): Promise<Order> {
     const supabase = this.getClient();
 
-    // Try update with snake_case columns first
     const updatePayload = { 
-        is_label_printed: isPrinted,
-        label_url: labelUrl,
-        label_printed_date: isPrinted ? new Date().toISOString() : null,
-        status: isPrinted ? 'Processing' : 'Pending'
+        IsLabelPrinted: isPrinted,
+        LabelUrl: labelUrl,
+        LabelPrintedDate: isPrinted ? new Date().toISOString() : null,
+        Status: isPrinted ? 'Processing' : 'Pending'
     };
 
     const { data, error } = await supabase
-      .from('orders')
+      .from('Orders')
       .update(updatePayload)
-      .eq('id', orderId)
-      .select(`*, users(*), order_items(*, products(*))`)
+      .eq('Id', orderId)
+      .select(`*, Users(*), OrderItems(*, Products(*))`)
       .single();
 
     if (error) {
-        // Fallback for PascalCase DB columns
-        const legacyPayload = {
-            IsLabelPrinted: isPrinted,
-            LabelUrl: labelUrl,
-            LabelPrintedDate: isPrinted ? new Date().toISOString() : null,
-            Status: isPrinted ? 'Processing' : 'Pending'
-        };
-        const { data: legacyData, error: legacyError } = await supabase
-            .from('Orders')
-            .update(legacyPayload)
-            .eq('Id', orderId)
-            .select(`*, User:Users(*), OrderItems:OrderItems(*, Product:Products(*))`)
-            .single();
-            
-        if (legacyError) throw new Error(legacyError.message);
-        return this.mapToDomain(legacyData);
+        console.error("Failed to update order label status", error);
+        throw new Error(error.message);
     }
     
     return this.mapToDomain(data);
   }
 
-  // Robust Mapper: Handles both snake_case (Supabase default) and PascalCase (C# Legacy)
   private mapToDomain(dbItem: any): Order {
-    // 1. Resolve User
-    // Could be 'users' (lowercase join) or 'User' (Pascal join)
-    const rawUser = dbItem.users || dbItem.User || dbItem.user;
+    const rawUser = dbItem.Users || dbItem.users;
     let user: User | undefined;
     
     if (rawUser) {
         user = {
-            id: rawUser.id || rawUser.Id,
-            email: rawUser.email || rawUser.Email,
-            firstName: rawUser.first_name || rawUser.FirstName,
-            lastName: rawUser.last_name || rawUser.LastName,
-            address: rawUser.address || rawUser.Address,
-            role: rawUser.role || rawUser.Role,
-            authId: rawUser.auth_id || rawUser.AuthId
+            id: rawUser.Id,
+            email: rawUser.Email,
+            firstName: rawUser.FirstName,
+            lastName: rawUser.LastName,
+            address: rawUser.Address,
+            role: rawUser.Role,
+            authId: rawUser.AuthId
         };
     }
 
-    // 2. Resolve Order Items
-    const rawItems = dbItem.order_items || dbItem.OrderItems || [];
+    const rawItems = dbItem.OrderItems || dbItem.order_items || [];
     const items: OrderItem[] = rawItems.map((i: any) => {
-        const rawProd = i.products || i.Product || i.product;
+        const rawProd = i.Products || i.products;
         return {
-            id: i.id || i.Id,
-            quantity: i.quantity || i.Quantity,
-            unitPrice: i.unit_price || i.UnitPrice,
-            orderId: i.order_id || i.OrderId,
-            productId: i.product_id || i.ProductId,
+            id: i.Id,
+            quantity: i.Quantity,
+            unitPrice: i.UnitPrice,
+            orderId: i.OrderId,
+            productId: i.ProductId,
             product: rawProd ? {
-                id: rawProd.id || rawProd.Id,
-                name: rawProd.name || rawProd.Name,
-                description: rawProd.description || rawProd.Description,
-                imageUrl: rawProd.image_url || rawProd.ImageUrl,
-                price: rawProd.price || rawProd.Price,
-                stockQuantity: rawProd.stock_quantity || rawProd.StockQuantity,
-                inspiredBy: rawProd.inspired_by || rawProd.InspiredBy,
-                gender: rawProd.gender || rawProd.Gender,
-                isOnSale: rawProd.is_on_sale || rawProd.IsOnSale,
-                isNew: rawProd.is_new || rawProd.IsNew,
-                rating: rawProd.rating || rawProd.Rating,
-                reviewCount: rawProd.review_count || rawProd.ReviewCount,
-                categoryId: rawProd.category_id || rawProd.CategoryId
+                id: rawProd.Id,
+                name: rawProd.Name,
+                description: rawProd.Description,
+                imageUrl: rawProd.ImageUrl,
+                price: rawProd.Price,
+                stockQuantity: rawProd.StockQuantity,
+                inspiredBy: rawProd.InspiredBy,
+                gender: rawProd.Gender,
+                isOnSale: rawProd.IsOnSale,
+                isNew: rawProd.IsNew,
+                rating: rawProd.Rating,
+                reviewCount: rawProd.ReviewCount,
+                categoryId: rawProd.CategoryId
             } : undefined
         };
     });
 
-    // 3. Resolve Root Order Fields
     return {
-        id: dbItem.id || dbItem.Id,
-        orderDate: dbItem.order_date || dbItem.OrderDate || new Date().toISOString(),
-        totalAmount: dbItem.total_amount || dbItem.TotalAmount || 0,
-        orderNumber: dbItem.order_number || dbItem.OrderNumber || 'UNKNOWN',
-        stripePaymentIntentId: dbItem.stripe_payment_intent_id || dbItem.StripePaymentIntentId,
-        status: dbItem.status || dbItem.Status || 'Pending',
-        userId: dbItem.user_id || dbItem.UserId,
+        id: dbItem.Id,
+        orderDate: dbItem.OrderDate || new Date().toISOString(),
+        totalAmount: dbItem.TotalAmount || 0,
+        orderNumber: dbItem.OrderNumber || 'UNKNOWN',
+        stripePaymentIntentId: dbItem.StripePaymentIntentId,
+        status: dbItem.Status || 'Pending',
+        userId: dbItem.UserId,
         user,
         orderItems: items,
-        isLabelPrinted: dbItem.is_label_printed || dbItem.IsLabelPrinted || false,
-        labelPrintedDate: dbItem.label_printed_date || dbItem.LabelPrintedDate,
-        labelUrl: dbItem.label_url || dbItem.LabelUrl,
-        
-        // Address Snapshots
-        shippingAddressSnapshot: dbItem.shipping_address_snapshot || dbItem.ShippingAddressSnapshot,
-        shippingCitySnapshot: dbItem.shipping_city_snapshot || dbItem.ShippingCitySnapshot,
-        shippingCountrySnapshot: dbItem.shipping_country_snapshot || dbItem.ShippingCountrySnapshot,
-        shippingPostalCodeSnapshot: dbItem.shipping_postal_code_snapshot || dbItem.ShippingPostalCodeSnapshot,
-        shippingPhoneSnapshot: dbItem.shipping_phone_snapshot || dbItem.ShippingPhoneSnapshot,
-        shippingStateSnapshot: dbItem.shipping_state_snapshot || dbItem.ShippingStateSnapshot,
-        shippingZipSnapshot: dbItem.shipping_zip_snapshot || dbItem.ShippingZipSnapshot
+        isLabelPrinted: dbItem.IsLabelPrinted || false,
+        labelPrintedDate: dbItem.LabelPrintedDate,
+        labelUrl: dbItem.LabelUrl,
+        shippingAddressSnapshot: dbItem.ShippingAddressSnapshot,
+        shippingCitySnapshot: dbItem.ShippingCitySnapshot,
+        shippingCountrySnapshot: dbItem.ShippingCountrySnapshot,
+        shippingPostalCodeSnapshot: dbItem.ShippingPostalCodeSnapshot,
+        shippingPhoneSnapshot: dbItem.ShippingPhoneSnapshot,
+        shippingStateSnapshot: dbItem.ShippingStateSnapshot,
+        shippingZipSnapshot: dbItem.ShippingZipSnapshot
     };
   }
 }

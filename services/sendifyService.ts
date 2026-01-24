@@ -22,23 +22,29 @@ class SendifyService {
 
   /**
    * Generates a shipping label using the specific Sendify Print Endpoint.
-   * Prioritizes the key from App Settings (runtime update), falls back to process.env.
+   * Prioritizes the key from App Settings (runtime update), falls back to Environment Variables.
    */
   async generateLabel(orderId: number): Promise<string> {
     try {
       const settings = this.getSettings();
+      // Vite uses import.meta.env. Access it safely.
+      const env = (import.meta as any).env || {};
+      
       // Allow runtime configuration override, otherwise use build-time env var
-      const apiKey = settings.sendifyApiKey || process.env.SENDIFY_API_KEY;
+      const apiKey = settings.sendifyApiKey || env.VITE_SENDIFY_API_KEY;
       const printUrl = 'https://app.sendify.se/external/v1/shipments/print';
 
       if (!apiKey) {
-        throw new Error("Configuration Error: Sendify API Key is missing. Please configure it in System Settings.");
+        throw new Error("Configuration Error: Sendify API Key is missing. Please configure it in System Settings or .env file.");
       }
 
-      // If using 'test' key, return mock immediately
+      // If using 'test' key, return mock immediately. 
+      // otherwise, we MUST attempt the real API call.
       if (apiKey === 'test') {
           return this.getMockLabelUrl();
       }
+
+      console.log(`Attempting to generate label for Order ${orderId} with Sendify...`);
 
       const payload = {
         shipment_ids: [orderId], // Using the Order ID as requested
@@ -47,49 +53,45 @@ class SendifyService {
         output_format: 'url'
       };
 
-      try {
-        const response = await fetch(printUrl, {
-            method: 'POST',
-            headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey
-            },
-            body: JSON.stringify(payload)
-        });
+      const response = await fetch(printUrl, {
+        method: 'POST',
+        headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey
+        },
+        body: JSON.stringify(payload)
+      });
 
-        if (!response.ok) {
-            // Attempt to parse error message from API
-            let errorMessage = "Label generation failed.";
-            try {
+      if (!response.ok) {
+        // Attempt to parse error message from API
+        let errorMessage = `API Error ${response.status}: ${response.statusText}`;
+        try {
             const errData = await response.json();
-            errorMessage = errData.message || errData.error || errorMessage;
-            } catch (e) { /* ignore json parse error */ }
-            
-            throw new Error(`Sendify API Error: ${errorMessage}`);
-        }
-
-        const data = await response.json();
+            console.error("Sendify API Error Payload:", errData);
+            errorMessage = errData.message || errData.error || JSON.stringify(errData);
+        } catch (e) { /* ignore json parse error */ }
         
-        if (!data.output_url) {
-            throw new Error("API returned success but no output_url was found.");
-        }
-
-        return data.output_url;
-
-      } catch (fetchError: any) {
-        // Handle CORS or Network errors by falling back to mock if in dev/demo environment
-        // or explicitly throwing if we want to be strict.
-        // For this demo app, we'll log and return mock to prevent "Failed to fetch" blocking the UI
-        console.warn("Sendify API unreachable (likely CORS). Falling back to mock.", fetchError);
-        if (fetchError.message === 'Failed to fetch' || fetchError.name === 'TypeError') {
-            return this.getMockLabelUrl();
-        }
-        throw fetchError;
+        throw new Error(errorMessage);
       }
+
+      const data = await response.json();
+      
+      if (!data.output_url) {
+        console.error("Sendify Success Response:", data);
+        throw new Error("API returned success but no 'output_url' was found in the response.");
+      }
+
+      return data.output_url;
 
     } catch (error: any) {
       console.error("Sendify Label Generation Failed:", error);
-      // Re-throw to be caught by the UI
+      
+      // CRITICAL CHANGE: Do NOT return the mock label on error. 
+      // We want the UI to show the user the actual error message.
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+         throw new Error("Network Error: Could not connect to Sendify. This might be a CORS issue (if running on localhost) or an internet connectivity issue.");
+      }
+
       throw new Error(error.message || "Unable to connect to Sendify API.");
     }
   }
@@ -99,8 +101,10 @@ class SendifyService {
    */
   async createShipment(order: Order): Promise<string> {
     const settings = this.getSettings();
+    const env = (import.meta as any).env || {};
+    
     const apiUrl = settings.sendifyApiUrl || 'https://api.sendify.com/v1';
-    const apiKey = settings.sendifyApiKey || process.env.SENDIFY_API_KEY;
+    const apiKey = settings.sendifyApiKey || env.VITE_SENDIFY_API_KEY;
     
     if (!apiKey || apiKey === 'test') {
       return this.getMockLabelUrl();
@@ -148,8 +152,8 @@ class SendifyService {
       });
 
       if (!response.ok) {
-        console.warn("Real API call failed, falling back to mock PDF for demo.");
-        return this.getMockLabelUrl();
+         const errText = await response.text();
+         throw new Error(`Sendify Create Shipment Failed: ${errText}`);
       }
 
       const data = await response.json();
@@ -157,13 +161,14 @@ class SendifyService {
 
     } catch (error) {
       console.error("Sendify API Error:", error);
-      return this.getMockLabelUrl();
+      throw error; // Throw real error
     }
   }
 
   async testConnection(): Promise<boolean> {
     const settings = this.getSettings();
-    const apiKey = settings.sendifyApiKey || process.env.SENDIFY_API_KEY;
+    const env = (import.meta as any).env || {};
+    const apiKey = settings.sendifyApiKey || env.VITE_SENDIFY_API_KEY;
     
     if (!apiKey) return false;
     if (apiKey === 'test') return true;
