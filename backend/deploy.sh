@@ -22,7 +22,11 @@ if [ -z "$DB_CONN_STR" ]; then
   exit 1
 fi
 
-# 2. Submit Build to Cloud Build (Pushes directly to Artifact Registry)
+# 2. Ask for Sendify API Key securely (New)
+read -s -p "Enter Sendify API Key (Secret): " SENDIFY_KEY
+echo ""
+
+# 3. Submit Build
 # We use the current timestamp as a tag
 TAG=$(date +%Y%m%d-%H%M%S)
 FULL_IMAGE_PATH="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$TAG"
@@ -30,8 +34,13 @@ FULL_IMAGE_PATH="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/$IMAGE_NAME:$TAG"
 echo -e "${GREEN}Building and Pushing image to $FULL_IMAGE_PATH...${NC}"
 gcloud builds submit --tag "$FULL_IMAGE_PATH" .
 
-# 3. Deploy to Cloud Run
+# 4. Deploy to Cloud Run
 echo -e "${GREEN}Deploying to Cloud Run...${NC}"
+
+# Construct env vars string. If SENDIFY_KEY is empty, it won't be set/updated (or passed as empty string)
+# We use --update-env-vars if available, but --set-env-vars overwrites. 
+# We'll use --set-env-vars to ensure state.
+
 gcloud run deploy "$SERVICE_NAME" \
   --image "$FULL_IMAGE_PATH" \
   --region "$REGION" \
@@ -40,6 +49,7 @@ gcloud run deploy "$SERVICE_NAME" \
   --set-env-vars "ASPNETCORE_ENVIRONMENT=Production" \
   --set-env-vars "ConnectionStrings__DefaultConnection=$DB_CONN_STR" \
   --set-env-vars "JwtSettings__Secret=REPLACE_WITH_REAL_SECRET_OR_USE_GCP_SECRET_MANAGER" \
+  --set-env-vars "SENDIFY_API_KEY=$SENDIFY_KEY" \
   --project "$PROJECT_ID"
 
 echo -e "${GREEN}Deployment Complete!${NC}"
