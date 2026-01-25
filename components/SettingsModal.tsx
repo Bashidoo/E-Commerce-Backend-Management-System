@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, PrinterDevice } from '../types';
-import { X, Save, Loader2, CheckCircle2, AlertCircle, Truck, Printer, Bluetooth, Monitor } from 'lucide-react';
+import { X, Save, Loader2, CheckCircle2, AlertCircle, Truck, Printer, Bluetooth, Monitor, Database } from 'lucide-react';
 import { sendifyService } from '../services/sendifyService';
 import { useZebraPrinters } from '../hooks/useZebraPrinters';
 import { useNotification } from '../contexts/NotificationContext';
@@ -20,18 +20,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     printerName: 'Default Printer',
     autoPrint: false,
     sendifyApiUrl: 'https://api.sendify.com/v1',
-    sendifyApiKey: ''
+    sendifyApiKey: '',
+    supabaseUrl: '',
+    supabaseAnonKey: ''
   });
   
   const [isTestingSendify, setIsTestingSendify] = useState(false);
-  const [sendifyTestStatus, setSendifyTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
     // Load existing settings
     try {
       const savedSettings = localStorage.getItem('appSettings');
       if (savedSettings) {
-        setSettings({ ...settings, ...JSON.parse(savedSettings) });
+        const parsed = JSON.parse(savedSettings);
+        setSettings(prev => ({ ...prev, ...parsed }));
       }
     } catch (err) {
       console.error("Failed to load settings", err);
@@ -52,7 +54,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       localStorage.setItem('appSettings', JSON.stringify(settingsToSave));
       
       onClose();
-      showNotification('success', 'System configuration saved successfully.');
+      showNotification('success', 'Configuration saved. Reloading...');
+      
+      // Reload to apply new database settings if changed
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
     } catch (err: any) {
       console.error("Save failed", err);
       const msg = err?.message || (typeof err === 'string' ? err : 'Unknown error');
@@ -66,33 +74,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           printerName: printer.name,
           selectedPrinter: printer
       });
-  };
-
-  const handleTestSendify = async () => {
-      if (!settings.sendifyApiKey) {
-          showNotification('error', 'API Key is missing.');
-          return;
-      }
-
-      try {
-          setIsTestingSendify(true);
-          setSendifyTestStatus('idle');
-          localStorage.setItem('appSettings', JSON.stringify(settings));
-          const success = await sendifyService.testConnection();
-          
-          if (success || settings.sendifyApiKey === 'test') {
-              setSendifyTestStatus('success');
-              showNotification('success', 'Sendify API connection successful.');
-          } else {
-              throw new Error("Authentication failed.");
-          }
-      } catch (err: any) {
-          setSendifyTestStatus('error');
-          const msg = err?.message || 'Unknown error';
-          showNotification('error', `Sendify Connection Failed: ${msg}`);
-      } finally {
-          setIsTestingSendify(false);
-      }
   };
 
   if (!isOpen) return null;
@@ -113,7 +94,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 onClick={() => setActiveTab('general')}
                 className={`flex-1 py-3 text-sm font-medium ${activeTab === 'general' ? 'text-indigo-600 border-b-2 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
             >
-                Integrations
+                System & Integrations
             </button>
             <button 
                 onClick={() => setActiveTab('printers')}
@@ -127,34 +108,55 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           
           {activeTab === 'general' ? (
               <>
-                {/* Sendify API Section */}
+                {/* Database Config */}
                 <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
+                        <Database size={16} className="text-indigo-600 dark:text-indigo-400"/> Database Connection
+                    </h3>
+                    <div className="bg-blue-50 dark:bg-blue-900/10 p-3 rounded-lg text-xs text-blue-700 dark:text-blue-300 mb-2">
+                        Enter your Supabase credentials here if not set in environment variables.
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Supabase URL</label>
+                        <input
+                            type="text"
+                            value={settings.supabaseUrl || ''}
+                            onChange={(e) => setSettings({ ...settings, supabaseUrl: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                            placeholder="https://xyz.supabase.co"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Anon Key</label>
+                        <input
+                            type="password"
+                            value={settings.supabaseAnonKey || ''}
+                            onChange={(e) => setSettings({ ...settings, supabaseAnonKey: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                            placeholder="eyJh..."
+                        />
+                    </div>
+                </div>
+
+                {/* Sendify API Section */}
+                <div className="space-y-3 pt-4">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
                         <Truck size={16} className="text-indigo-600 dark:text-indigo-400"/> Sendify Integration
                     </h3>
+                    <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 mb-2">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <strong>Note:</strong> If you have configured <code>SENDIFY_API_KEY</code> on your Backend/Cloud Run, you can leave this blank.
+                        </p>
+                    </div>
                     <div>
-                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">API Key</label>
-                        <div className="flex gap-2">
-                            <input
-                                type="password"
-                                value={settings.sendifyApiKey}
-                                onChange={(e) => {
-                                    setSettings({ ...settings, sendifyApiKey: e.target.value });
-                                    setSendifyTestStatus('idle');
-                                }}
-                                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
-                                placeholder="sk_live_..."
-                            />
-                            <button 
-                                onClick={handleTestSendify}
-                                disabled={isTestingSendify}
-                                className="px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 min-w-[100px] flex justify-center"
-                            >
-                                {isTestingSendify ? <Loader2 size={16} className="animate-spin" /> : "Test API"}
-                            </button>
-                        </div>
-                        {sendifyTestStatus === 'success' && <div className="mt-2 text-xs text-green-700 dark:text-green-400 flex items-center"><CheckCircle2 size={12} className="mr-1"/> API Authenticated</div>}
-                        {sendifyTestStatus === 'error' && <div className="mt-2 text-xs text-red-700 dark:text-red-400 flex items-center"><AlertCircle size={12} className="mr-1"/> Invalid API Key</div>}
+                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Local Override Key (Optional)</label>
+                        <input
+                            type="password"
+                            value={settings.sendifyApiKey}
+                            onChange={(e) => setSettings({ ...settings, sendifyApiKey: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                            placeholder="sk_live_... (Leave empty to use Server Key)"
+                        />
                     </div>
                 </div>
               </>
