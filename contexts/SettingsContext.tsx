@@ -10,10 +10,11 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // We now strictly use the constants from supabaseClient
   const supabaseUrl = DEFAULT_SUPABASE_URL;
   const supabaseKey = DEFAULT_SUPABASE_KEY;
-  const isConfigured = true; // Always configured with hardcoded defaults
+  
+  // Only consider configured if we actually have a key
+  const isConfigured = !!supabaseKey && !!supabaseUrl;
 
   return (
     <SettingsContext.Provider value={{ 

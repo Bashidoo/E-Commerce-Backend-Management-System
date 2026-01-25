@@ -102,4 +102,7 @@ export interface AppSettings {
   // Sendify Integration
   sendifyApiUrl: string;
   sendifyApiKey: string;
+  // Supabase Configuration
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
 }
