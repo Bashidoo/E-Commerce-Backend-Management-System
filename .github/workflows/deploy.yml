@@ -10,7 +10,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: us-central1 
+  REGION: us-central1
   REPO_NAME: orderflow-repo
   SERVICE_NAME: orderflow-api
   IMAGE_NAME: orderflow-backend
@@ -38,6 +38,8 @@ jobs:
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
       - name: Build and Push Container
+        # THIS IS THE CRITICAL FIX:
+        # It ensures we are inside the 'backend' folder before building.
         working-directory: ./backend
         run: |
           docker build -t "${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" .
