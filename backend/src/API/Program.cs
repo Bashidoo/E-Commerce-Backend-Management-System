@@ -17,6 +17,24 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// DEBUG LOGGING: Print essential config to Console (Standard Out) for Cloud Run
+Console.WriteLine(">>> STARTING APPLICATION <<<");
+var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+Console.WriteLine($"Environment: {env}");
+
+var rawConn = builder.Configuration.GetConnectionString("DefaultConnection") 
+              ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+
+if (string.IsNullOrEmpty(rawConn))
+{
+    Console.WriteLine("CRITICAL ERROR: ConnectionString 'DefaultConnection' is NULL or EMPTY.");
+}
+else
+{
+    var masked = System.Text.RegularExpressions.Regex.Replace(rawConn, "Password=[^;]*", "Password=******");
+    Console.WriteLine($"Connection String Found: {masked}");
+}
+
 // 1. Serilog Configuration
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
