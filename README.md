@@ -154,6 +154,6 @@ chmod +x deploy.sh
 3.  Select your printer from the browser's pairing dialog.
 
 ---
-
+.
 ## 📄 License
 [MIT](https://choosealicense.com/licenses/mit/)
