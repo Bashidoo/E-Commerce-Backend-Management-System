@@ -56,10 +56,15 @@ public class GlobalExceptionHandler : IExceptionHandler
                 break;
 
             default:
+                // DEBUGGING MODE: Exposing internal errors to the client to identify Cloud Run issues
                 httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
                 problemDetails.Title = "Internal Server Error";
                 problemDetails.Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1";
-                problemDetails.Detail = "An unexpected error occurred.";
+                problemDetails.Detail = $"Error: {exception.Message}";
+                
+                // Add StackTrace and Inner Exception for deep debugging
+                problemDetails.Extensions["innerError"] = exception.InnerException?.Message;
+                problemDetails.Extensions["stackTrace"] = exception.StackTrace;
                 break;
         }
 

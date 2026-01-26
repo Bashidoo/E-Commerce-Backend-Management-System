@@ -17,7 +17,37 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Serilog Configuration
+// DEBUG LOGGING: Print essential config to Console (Standard Out) for Cloud Run
+Console.WriteLine(">>> STARTING APPLICATION <<<");
+var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+Console.WriteLine($"Environment: {env}");
+
+// 1. Get Connection String with Robust Fallback
+// ASP.NET Core usually maps "ConnectionStrings__DefaultConnection" -> "ConnectionStrings:DefaultConnection"
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+// Fallback: Check environment variable directly if Configuration didn't pick it up
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+}
+
+// CRITICAL FIX: Fail Fast. 
+// If we don't have a connection string, we cannot start the app. 
+// Throwing here prevents the "No database provider has been configured" error later.
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    var msg = "CRITICAL ERROR: ConnectionString 'DefaultConnection' is NULL or EMPTY. The application cannot start.";
+    Console.WriteLine(msg);
+    throw new InvalidOperationException(msg);
+}
+else
+{
+    var masked = System.Text.RegularExpressions.Regex.Replace(connectionString, "Password=[^;]*", "Password=******");
+    Console.WriteLine($"Connection String Found: {masked}");
+}
+
+// 2. Serilog Configuration
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
 
@@ -25,39 +55,33 @@ builder.Host.UseSerilog((context, configuration) =>
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://*:{port}");
 
-// 2. Database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
-
+// 3. Database Registration
+// We use the validated connectionString from above.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    if (!string.IsNullOrEmpty(connectionString))
-    {
-        options.UseNpgsql(connectionString);
-    }
+    options.UseNpgsql(connectionString);
 });
 
-// 3. DI - Repositories
+// 4. DI - Repositories
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
-// Specific Product/User repositories are not implemented; GenericRepository is used in services.
 
-// 4. DI - Services & Infrastructure
+// 5. DI - Services & Infrastructure
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 builder.Services.AddHttpClient();
 
-// 5. AutoMapper & Validators
+// 6. AutoMapper & Validators
 builder.Services.AddAutoMapper(typeof(MappingProfile));
 builder.Services.AddValidatorsFromAssemblyContaining<CreateOrderValidator>();
 
-// 6. Global Exception Handler
+// 7. Global Exception Handler
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-// 7. Authentication (JWT)
+// 8. Authentication (JWT)
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["Secret"] ?? Environment.GetEnvironmentVariable("JwtSettings__Secret");
 
@@ -79,7 +103,7 @@ if (!string.IsNullOrEmpty(secretKey))
         });
 }
 
-// 8. Controllers & Swagger
+// 9. Controllers & Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -114,7 +138,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// 9. CORS
+// 10. CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
