@@ -40,8 +40,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // 3. DI - Repositories
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
-builder.Services.AddScoped<IProductRepository, ProductRepository>();
-builder.Services.AddScoped<IUserRepository, UserRepository>();
+// Specific Product/User repositories are not implemented; GenericRepository is used in services.
 
 // 4. DI - Services & Infrastructure
 builder.Services.AddScoped<IOrderService, OrderService>();
