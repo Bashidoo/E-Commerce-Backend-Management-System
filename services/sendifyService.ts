@@ -44,10 +44,10 @@ class SendifyService {
 
       const proxyUrl = `${apiBase}/api/shipping/generate-label`;
 
-      // Use custom ID if provided, otherwise default to orderId (which implies DB mock data)
+      // FIX: Ensure ID is always a STRING. Sendify API rejects numbers in the JSON array.
       const shipmentIdToUse = customShipmentId && customShipmentId.trim() !== '' 
           ? customShipmentId 
-          : orderId;
+          : String(orderId);
 
       console.log(`Generating label via Backend Proxy at: ${proxyUrl}. Shipment ID: ${shipmentIdToUse}`);
 
