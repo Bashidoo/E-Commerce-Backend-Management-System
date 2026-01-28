@@ -53,5 +53,6 @@ jobs:
           env_vars: |
             ASPNETCORE_ENVIRONMENT=Production
             SENDIFY_API_KEY=${{ secrets.SENDIFY_API_KEY }}
+            SENDIFY_API_URL=${{ secrets.SENDIFY_API_URL }}
             ConnectionStrings__DefaultConnection=${{ secrets.DB_CONNECTION_STRING }}
             JwtSettings__Secret=${{ secrets.SUPABASE_JWT_SECRET }}
