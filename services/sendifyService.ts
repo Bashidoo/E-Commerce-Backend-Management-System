@@ -37,7 +37,7 @@ class SendifyService {
       // 1. Local Storage Setting (User configured in UI)
       // 2. Env Var (VITE_API_URL)
       // 3. Fallback to empty (relative path)
-      let apiBase = settings.backendApiUrl || env.VITE_API_URL || ''; 
+      let apiBase = settings.backendApiUrl?.trim() || env.VITE_API_URL || ''; 
       
       // Remove trailing slash if present
       if (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);

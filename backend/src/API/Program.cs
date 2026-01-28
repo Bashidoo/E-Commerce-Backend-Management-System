@@ -107,7 +107,7 @@ if (!string.IsNullOrEmpty(secretKey))
             };
         });
 }
-else 
+else
 {
     Console.WriteLine("WARNING: JWT Secret is missing. Authentication will fail.");
 }
@@ -118,7 +118,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "OrderFlow API", Version = "v1" });
-    
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme.",
@@ -162,17 +162,9 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-else
-{
-    // Optional: Enable Swagger in Prod for debugging if needed
-    // app.UseSwagger();
-    // app.UseSwaggerUI();
-}
+// Enable Swagger in ALL environments (including Production) for debugging purposes
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseSerilogRequestLogging();
 app.UseCors("AllowFrontend");

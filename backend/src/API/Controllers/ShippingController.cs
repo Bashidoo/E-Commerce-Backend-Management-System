@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/shipping")] // Explicit lowercase route to avoid casing issues
 public class ShippingController : ControllerBase
 {
     private readonly IHttpClientFactory _httpClientFactory;
@@ -19,24 +19,37 @@ public class ShippingController : ControllerBase
         _logger = logger;
     }
 
+    // GET api/shipping/test
+    // Use this to verify the controller is deployed and reachable
+    [HttpGet("test")]
+    public IActionResult TestConnection()
+    {
+        return Ok(new
+        {
+            message = "Shipping Controller is Active",
+            time = DateTime.UtcNow,
+            sendifyKeyConfigured = !string.IsNullOrEmpty(_configuration["SENDIFY_API_KEY"])
+        });
+    }
+
     [HttpPost("generate-label")]
     public async Task<IActionResult> GenerateLabel([FromBody] JsonElement payload, [FromHeader(Name = "x-api-key")] string? apiKey)
     {
         // Check for 'SENDIFY_API_KEY' which matches the GitHub Secret name provided by user
         var envKey = _configuration["SENDIFY_API_KEY"];
-        
+
         // Use Header Key (Dev Override) OR Server Env Key
         var finalApiKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey : envKey;
 
         // Logging for debugging (Masking key)
         var keyStatus = string.IsNullOrWhiteSpace(finalApiKey) ? "MISSING" : $"PRESENT (Starts with {finalApiKey.Substring(0, Math.Min(4, finalApiKey.Length))}...)";
-        _logger.LogInformation("Generating Label. API Key Status: {KeyStatus}. Source: {Source}", 
-            keyStatus, 
+        _logger.LogInformation("Generating Label. API Key Status: {KeyStatus}. Source: {Source}",
+            keyStatus,
             !string.IsNullOrWhiteSpace(apiKey) ? "Client Header" : "Server Env (SENDIFY_API_KEY)");
 
         // Configurable URL (Defaults to Production if missing)
-        var sendifyUrl = _configuration["SendifySettings:ApiUrl"] 
-                         ?? _configuration["SENDIFY_API_URL"] 
+        var sendifyUrl = _configuration["SendifySettings:ApiUrl"]
+                         ?? _configuration["SENDIFY_API_URL"]
                          ?? "https://app.sendify.se/external/v1/shipments/print";
 
         _logger.LogInformation("Target Sendify URL: {Url}", sendifyUrl);
@@ -46,11 +59,11 @@ public class ShippingController : ControllerBase
             return Unauthorized(new { message = "Sendify API Key is missing. Please configure 'SENDIFY_API_KEY' in Backend Environment Variables." });
         }
 
-        try 
+        try
         {
             var client = _httpClientFactory.CreateClient();
             var request = new HttpRequestMessage(HttpMethod.Post, sendifyUrl);
-            
+
             request.Headers.Add("x-api-key", finalApiKey);
             request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
 
