@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Order } from '../types';
-import { Printer, RefreshCw, AlertTriangle, Truck, MapPin, CreditCard, User, Package, ExternalLink, ArrowLeft, FileText } from 'lucide-react';
+import { Printer, RefreshCw, AlertTriangle, Truck, MapPin, CreditCard, User, Package, ExternalLink, ArrowLeft, FileText, Settings2 } from 'lucide-react';
 import { orderService } from '../services/orderService';
 import { sendifyService } from '../services/sendifyService';
 import AsyncImage from './AsyncImage';
@@ -15,11 +15,15 @@ interface OrderDetailsPanelProps {
 const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({ order, onOrderUpdated, onCloseMobile }) => {
   const [isPrinting, setIsPrinting] = useState(false);
   const [confirmReprint, setConfirmReprint] = useState(false);
+  const [customShipmentId, setCustomShipmentId] = useState('');
+  const [showAdvancedLabel, setShowAdvancedLabel] = useState(false);
   const { showNotification } = useNotification();
 
   // Reset confirmation when selected order changes
   React.useEffect(() => {
     setConfirmReprint(false);
+    setCustomShipmentId('');
+    setShowAdvancedLabel(false);
   }, [order?.id]);
 
   if (!order) {
@@ -44,7 +48,8 @@ const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({ order, onOrderUpd
       setIsPrinting(true);
       
       // 1. Call Sendify Service (Generate Label)
-      const labelUrl = await sendifyService.generateLabel(order.id);
+      // Use the custom ID if provided, otherwise default to internal Order ID (which likely returns dummy if not mapped)
+      const labelUrl = await sendifyService.generateLabel(order.id, customShipmentId);
       
       // 2. Update Order via OrderService
       const updated = await orderService.updateOrderLabelStatus(order.id, true, labelUrl);
@@ -107,37 +112,65 @@ const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({ order, onOrderUpd
             </p>
             </div>
             
-            <div className="flex flex-col items-end">
-            {confirmReprint && (
-                <div className="flex flex-col items-end mb-2 animate-in fade-in slide-in-from-top-1">
-                    <span className="text-xs text-amber-600 dark:text-amber-500 font-bold flex items-center mb-1">
-                    <AlertTriangle size={12} className="mr-1"/> 
-                    Already Generated
-                    </span>
-                    <button onClick={() => setConfirmReprint(false)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 underline">
-                    Cancel
-                    </button>
-                </div>
-            )}
+            <div className="flex flex-col items-end gap-2">
+                {confirmReprint && (
+                    <div className="flex flex-col items-end mb-2 animate-in fade-in slide-in-from-top-1">
+                        <span className="text-xs text-amber-600 dark:text-amber-500 font-bold flex items-center mb-1">
+                        <AlertTriangle size={12} className="mr-1"/> 
+                        Already Generated
+                        </span>
+                        <button onClick={() => setConfirmReprint(false)} className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 underline">
+                        Cancel
+                        </button>
+                    </div>
+                )}
 
-            <button
-                onClick={handleGenerateLabel}
-                disabled={isPrinting}
-                className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm font-semibold text-sm transition-all
-                ${confirmReprint 
-                    ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-200' 
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md'
-                }
-                ${isPrinting ? 'opacity-70 cursor-not-allowed' : ''}
-                `}
-            >
-                {isPrinting ? <RefreshCw size={18} className="animate-spin" /> : <FileText size={18} />}
-                <span>{isPrinting ? 'Generating...' : (confirmReprint ? 'Regenerate' : 'Generate Label')}</span>
-            </button>
+                <button
+                    onClick={handleGenerateLabel}
+                    disabled={isPrinting}
+                    className={`
+                    flex items-center gap-2 px-4 py-2 rounded-lg shadow-sm font-semibold text-sm transition-all
+                    ${confirmReprint 
+                        ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-200' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-md'
+                    }
+                    ${isPrinting ? 'opacity-70 cursor-not-allowed' : ''}
+                    `}
+                >
+                    {isPrinting ? <RefreshCw size={18} className="animate-spin" /> : <FileText size={18} />}
+                    <span>{isPrinting ? 'Generating...' : (confirmReprint ? 'Regenerate' : 'Generate Label')}</span>
+                </button>
+
+                <button 
+                    onClick={() => setShowAdvancedLabel(!showAdvancedLabel)}
+                    className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1"
+                >
+                    <Settings2 size={12} /> Advanced Options
+                </button>
             </div>
         </div>
         
+        {/* Advanced / Debugging Options for Sendify */}
+        {showAdvancedLabel && (
+            <div className="mt-2 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-in fade-in zoom-in-95">
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                    Manual Sendify Shipment ID (Testing)
+                </label>
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        value={customShipmentId}
+                        onChange={(e) => setCustomShipmentId(e.target.value)}
+                        placeholder="e.g. shp_123456"
+                        className="flex-1 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                    Paste a real Shipment ID from your Sendify Dashboard to test printing. Leave empty to use Order ID ({order.id}).
+                </p>
+            </div>
+        )}
+
         {/* View Label Link if exists */}
         {order.labelUrl && (
             <a href={order.labelUrl} target="_blank" rel="noreferrer" className="text-xs flex items-center text-indigo-600 dark:text-indigo-400 hover:underline">

@@ -62,8 +62,12 @@ const App: React.FC = () => {
   }, [session]);
 
   const handleOrderUpdate = (updatedOrder: Order) => {
+    // Optimistically update local state first
     setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
     setSelectedOrder(updatedOrder);
+    
+    // Refetch from server to ensure full synchronization
+    fetchOrders();
   };
 
   // Derived state for backlog (Pending orders)
@@ -268,6 +272,8 @@ const App: React.FC = () => {
                      <option value="Pending">Pending</option>
                      <option value="Processing">Processing</option>
                      <option value="Shipped">Shipped</option>
+                     <option value="Delivered">Delivered</option>
+                     <option value="Cancelled">Cancelled</option>
                    </select>
                    <select value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm px-2 py-2 outline-none dark:text-slate-300">
                      <option value="All">Labels</option>

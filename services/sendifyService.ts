@@ -23,10 +23,11 @@ class SendifyService {
   /**
    * Generates a shipping label.
    * ROUTES REQUEST THROUGH BACKEND PROXY.
-   * STRICT SECURITY: This method does NOT read any env vars for the API key.
-   * It assumes the Backend (API) has the key injected securely in the cloud.
+   * 
+   * @param orderId The internal order ID.
+   * @param customShipmentId Optional. If provided, uses this ID (e.g. 'shp_123') instead of the numeric orderId.
    */
-  async generateLabel(orderId: number): Promise<string> {
+  async generateLabel(orderId: number, customShipmentId?: string): Promise<string> {
     try {
       const settings = this.getSettings();
       const env = (import.meta as any).env || {};
@@ -38,10 +39,15 @@ class SendifyService {
       const apiBase = env.VITE_API_URL || ''; 
       const proxyUrl = `${apiBase}/api/shipping/generate-label`;
 
-      console.log(`Generating label for Order ${orderId} via Backend Proxy...`);
+      // Use custom ID if provided, otherwise default to orderId (which implies DB mock data)
+      const shipmentIdToUse = customShipmentId && customShipmentId.trim() !== '' 
+          ? customShipmentId 
+          : orderId;
+
+      console.log(`Generating label via Backend Proxy. Shipment ID: ${shipmentIdToUse}`);
 
       const payload = {
-        shipment_ids: [orderId], 
+        shipment_ids: [shipmentIdToUse], 
         document_type: 'label',
         label_layout: '1x2',
         output_format: 'url'

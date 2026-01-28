@@ -17,8 +17,10 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// DEBUG LOGGING: Print essential config to Console (Standard Out) for Cloud Run
-Console.WriteLine(">>> STARTING APPLICATION <<<");
+// =========================================================================
+// DEBUGGING & CONFIGURATION CHECK
+// =========================================================================
+Console.WriteLine(">>> STARTING APPLICATION (DEBUG MODE) <<<");
 var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 Console.WriteLine($"Environment: {env}");
 
@@ -29,6 +31,7 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 // Fallback: Check environment variable directly if Configuration didn't pick it up
 if (string.IsNullOrWhiteSpace(connectionString))
 {
+    Console.WriteLine("Warning: ConnectionString not found in Configuration. Checking Environment Variables directly...");
     connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 }
 
@@ -39,6 +42,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 {
     var msg = "CRITICAL ERROR: ConnectionString 'DefaultConnection' is NULL or EMPTY. The application cannot start.";
     Console.WriteLine(msg);
+    // This exception will be visible in Cloud Run logs
     throw new InvalidOperationException(msg);
 }
 else
@@ -59,6 +63,7 @@ builder.WebHost.UseUrls($"http://*:{port}");
 // We use the validated connectionString from above.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
+    // FIX: Unconditional registration. We already checked string validity above.
     options.UseNpgsql(connectionString);
 });
 
@@ -101,6 +106,10 @@ if (!string.IsNullOrEmpty(secretKey))
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
             };
         });
+}
+else 
+{
+    Console.WriteLine("WARNING: JWT Secret is missing. Authentication will fail.");
 }
 
 // 9. Controllers & Swagger
@@ -153,10 +162,17 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 
-
+if (app.Environment.IsDevelopment())
+{
     app.UseSwagger();
     app.UseSwaggerUI();
-
+}
+else
+{
+    // Optional: Enable Swagger in Prod for debugging if needed
+    // app.UseSwagger();
+    // app.UseSwaggerUI();
+}
 
 app.UseSerilogRequestLogging();
 app.UseCors("AllowFrontend");
