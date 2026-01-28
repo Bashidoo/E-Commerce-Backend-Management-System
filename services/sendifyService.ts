@@ -24,9 +24,6 @@ class SendifyService {
   /**
    * Generates a shipping label.
    * ROUTES REQUEST THROUGH BACKEND PROXY.
-   * 
-   * @param orderId The internal order ID.
-   * @param customShipmentId Optional. If provided, uses this ID (e.g. 'shp_123') instead of the numeric orderId.
    */
   async generateLabel(orderId: number, customShipmentId?: string): Promise<string> {
     try {
@@ -34,8 +31,6 @@ class SendifyService {
       const env = (import.meta as any).env || {};
       
       let apiBase = settings.backendApiUrl?.trim() || env.VITE_API_URL || ''; 
-      
-      // Basic URL Cleanup
       if (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);
       
       if (!apiBase) {
@@ -45,27 +40,12 @@ class SendifyService {
       const proxyUrl = `${apiBase}/api/shipping/generate-label`;
       const testUrl = `${apiBase}/api/shipping/test`;
 
-      // 1. DIAGNOSTIC PRE-CHECK
-      console.log(`Diagnosing Connection to: ${apiBase}`);
-      try {
-        const testResp = await fetch(testUrl, { method: 'GET' });
-        if (!testResp.ok) {
-            console.warn(`Warning: Test Endpoint returned ${testResp.status}. The Controller might not be deployed.`);
-        } else {
-            console.log("Diagnostic Check: Shipping Controller is Active.");
-        }
-      } catch (checkErr) {
-        console.warn("Diagnostic Check Failed: Could not reach backend root.", checkErr);
-        // We continue anyway, just in case it's a specific endpoint issue
-      }
-
-      // 2. PREPARE REQUEST
-      // Ensure ID is always a STRING.
+      // 1. PREPARE PAYLOAD
       const shipmentIdToUse = customShipmentId && customShipmentId.trim() !== '' 
           ? customShipmentId 
           : String(orderId);
 
-      console.log(`Sending Label Request to: ${proxyUrl}. Shipment ID: ${shipmentIdToUse}`);
+      console.log(`[SendifyService] Target: ${proxyUrl} | ID: ${shipmentIdToUse}`);
 
       const payload = {
         shipment_ids: [shipmentIdToUse], 
@@ -74,57 +54,80 @@ class SendifyService {
         output_format: 'url'
       };
 
-      const headers: any = {
-        'Content-Type': 'application/json'
-      };
-      
-      const apiKey = settings.sendifyApiKey;
-      if (apiKey) {
-          headers['x-api-key'] = apiKey;
-      }
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (settings.sendifyApiKey) headers['x-api-key'] = settings.sendifyApiKey;
 
-      // 3. EXECUTE REQUEST
+      // 2. EXECUTE REQUEST
       const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        let errorText = response.statusText;
-        try {
-            errorText = await response.text();
-        } catch (readError) {
-            console.warn("Could not read error response body:", readError);
-        }
-        
-        if (response.status === 404) {
-             throw new Error(`Endpoint 404 Not Found at ${proxyUrl}. The API is reachable, but 'api/shipping/generate-label' does not exist. Check Cloud Run logs.`);
-        }
-
-        let errorMessage = `API Error ${response.status}`;
-        try {
-            const errData = JSON.parse(errorText);
-            console.error("Sendify API Error Payload:", errData);
-            errorMessage = errData.message || errData.error || errorMessage;
-        } catch (e) { 
-             if (errorText) errorMessage = errorText;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
+      const contentType = response.headers.get("content-type");
+      let errorBody = "";
       
-      if (!data.output_url) {
-        throw new Error("API returned success but no 'output_url' was found.");
+      if (contentType && contentType.includes("application/json")) {
+          const json = await response.json();
+          // If success
+          if (response.ok) {
+              if (!json.output_url) throw new Error("API success but missing 'output_url'.");
+              return json.output_url;
+          }
+          errorBody = JSON.stringify(json, null, 2);
+      } else {
+          errorBody = await response.text();
+          if (response.ok) {
+             return errorBody; 
+          }
       }
 
-      return data.output_url;
+      // 3. HANDLE ERRORS
+      if (response.status === 404) {
+          // INTELLIGENT DETECTION: 
+          // If the error body is JSON and contains "error", it is a BUSINESS ERROR from Sendify (Shipment Not Found),
+          // passed through by an older version of the backend. It is NOT a connectivity error.
+          let isBusinessError = false;
+          try {
+              if (errorBody && (errorBody.trim().startsWith('{') || errorBody.includes('"error"'))) {
+                  isBusinessError = true;
+              }
+          } catch(e) {}
+
+          if (isBusinessError) {
+              // Extract the clean message if possible
+              try {
+                  const errJson = JSON.parse(errorBody);
+                  const msg = errJson.error || errJson.message || errorBody;
+                  throw new Error(`Shipment Not Found in Sendify: ${msg}`);
+              } catch(e) {
+                  throw new Error(`Shipment Not Found in Sendify: ${errorBody}`);
+              }
+          }
+
+          // If it's NOT a business error, it's likely the Backend Route is missing.
+          console.warn("[SendifyService] 404 encountered (Non-JSON). Running connectivity check...");
+          try {
+              const check = await fetch(testUrl);
+              if (check.ok) {
+                   throw new Error(`The Backend is Online, but the route '${proxyUrl}' was not found. This usually means the 'ShippingController' is missing from the deployment.`);
+              } else {
+                   throw new Error(`Backend Connectivity Check Failed (${check.status}). Is the server running at ${apiBase}?`);
+              }
+          } catch (connErr) {
+              throw new Error(`Backend Unreachable (404). Check URL in settings. Details: ${errorBody}`);
+          }
+      }
+
+      if (response.status === 502) {
+          throw new Error(`Upstream Sendify Error: ${errorBody}`);
+      }
+
+      throw new Error(`API Error (${response.status}): ${errorBody}`);
 
     } catch (error: any) {
-      console.error("Sendify Label Generation Failed:", error);
-      throw new Error(error.message || "Unable to connect to Sendify API via Proxy.");
+      console.error("Label Generation Failed:", error);
+      throw error; // Re-throw to UI
     }
   }
 

@@ -153,8 +153,6 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // --- DIAGNOSTIC MIDDLEWARE ---
-// This will log every single request hitting Kestrel.
-// If you don't see this log in Cloud Run, the request isn't reaching the container.
 app.Use(async (context, next) =>
 {
     Console.WriteLine($">>> Incoming Request: {context.Request.Method} {context.Request.Path}{context.Request.QueryString}");
@@ -178,5 +176,29 @@ app.MapControllers();
 
 // Root Health Check
 app.MapGet("/", () => new { status = "Active", message = "OrderFlow API is running", timestamp = DateTime.UtcNow });
+
+// --- LIST ALL ROUTES ON STARTUP ---
+// This block prints every registered route to the logs so we can verify if the Controller was loaded.
+try
+{
+    var endpointSources = app.Services.GetServices<EndpointDataSource>();
+    Console.WriteLine(">>> REGISTERED ROUTES LIST <<<");
+    foreach (var dataSource in endpointSources)
+    {
+        foreach (var endpoint in dataSource.Endpoints)
+        {
+            if (endpoint is RouteEndpoint routeEndpoint)
+            {
+                Console.WriteLine($"ROUTE: {routeEndpoint.RoutePattern.RawText} -> {routeEndpoint.DisplayName}");
+            }
+        }
+    }
+    Console.WriteLine(">>> END ROUTES LIST <<<");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error listing routes: {ex.Message}");
+}
+// ----------------------------------
 
 app.Run();

@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace API.Controllers;
 
 [ApiController]
-[Route("api/shipping")] // Explicit lowercase route to avoid casing issues
+[Route("api/shipping")]
 public class ShippingController : ControllerBase
 {
     private readonly IHttpClientFactory _httpClientFactory;
@@ -19,11 +19,10 @@ public class ShippingController : ControllerBase
         _logger = logger;
     }
 
-    // GET api/shipping/test
-    // Use this to verify the controller is deployed and reachable
     [HttpGet("test")]
     public IActionResult TestConnection()
     {
+        // Simple 200 OK to verify connectivity
         return Ok(new
         {
             message = "Shipping Controller is Active",
@@ -35,28 +34,21 @@ public class ShippingController : ControllerBase
     [HttpPost("generate-label")]
     public async Task<IActionResult> GenerateLabel([FromBody] JsonElement payload, [FromHeader(Name = "x-api-key")] string? apiKey)
     {
-        // Check for 'SENDIFY_API_KEY' which matches the GitHub Secret name provided by user
+        // 1. Resolve API Key
         var envKey = _configuration["SENDIFY_API_KEY"];
-
-        // Use Header Key (Dev Override) OR Server Env Key
         var finalApiKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey : envKey;
 
-        // Logging for debugging (Masking key)
-        var keyStatus = string.IsNullOrWhiteSpace(finalApiKey) ? "MISSING" : $"PRESENT (Starts with {finalApiKey.Substring(0, Math.Min(4, finalApiKey.Length))}...)";
-        _logger.LogInformation("Generating Label. API Key Status: {KeyStatus}. Source: {Source}",
-            keyStatus,
-            !string.IsNullOrWhiteSpace(apiKey) ? "Client Header" : "Server Env (SENDIFY_API_KEY)");
-
-        // Configurable URL (Defaults to Production if missing)
+        // 2. Resolve Sendify URL
         var sendifyUrl = _configuration["SendifySettings:ApiUrl"]
                          ?? _configuration["SENDIFY_API_URL"]
                          ?? "https://app.sendify.se/external/v1/shipments/print";
 
-        _logger.LogInformation("Target Sendify URL: {Url}", sendifyUrl);
+        _logger.LogInformation(">>> Generating Label Request");
+        _logger.LogInformation("Target URL: {Url}", sendifyUrl);
 
         if (string.IsNullOrWhiteSpace(finalApiKey))
         {
-            return Unauthorized(new { message = "Sendify API Key is missing. Please configure 'SENDIFY_API_KEY' in Backend Environment Variables." });
+            return Unauthorized(new { message = "Sendify API Key is missing on Server." });
         }
 
         try
@@ -72,15 +64,33 @@ public class ShippingController : ControllerBase
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Sendify API Error: {StatusCode} - {Content}", response.StatusCode, content);
-                return StatusCode((int)response.StatusCode, content);
+                _logger.LogError("Upstream Sendify Error: {StatusCode} - {Content}", response.StatusCode, content);
+
+                // IMPORTANT: If Sendify returns 404, we return 502 (Bad Gateway) to distinguish 
+                // between "Our Backend Route Missing" (404) and "Sendify Shipment Not Found" (404).
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    return StatusCode(502, new
+                    {
+                        error = "Upstream Sendify Resource Not Found",
+                        details = "The Shipment ID sent to Sendify was not found.",
+                        upstream_response = content
+                    });
+                }
+
+                // Proxy other errors as 502
+                return StatusCode(502, new
+                {
+                    error = $"Upstream API Error ({response.StatusCode})",
+                    details = content
+                });
             }
 
             return Content(content, "application/json");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Internal Backend Proxy Error");
+            _logger.LogError(ex, "Internal Backend Proxy Exception");
             return StatusCode(500, new { message = "Internal Backend Proxy Error", details = ex.Message });
         }
     }
