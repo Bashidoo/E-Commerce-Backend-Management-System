@@ -16,7 +16,8 @@ class SendifyService {
       printerName: '',
       autoPrint: false,
       sendifyApiUrl: 'https://api.sendify.com/v1',
-      sendifyApiKey: ''
+      sendifyApiKey: '',
+      backendApiUrl: ''
     };
   }
 
@@ -32,11 +33,15 @@ class SendifyService {
       const settings = this.getSettings();
       const env = (import.meta as any).env || {};
       
-      // If the user manually entered a key in Settings, use it (Dev/Override mode).
-      // Otherwise, send NOTHING. The backend will use its secure server-side secret.
-      const apiKey = settings.sendifyApiKey;
+      // Order of precedence:
+      // 1. Local Storage Setting (User configured in UI)
+      // 2. Env Var (VITE_API_URL)
+      // 3. Fallback to empty (relative path)
+      let apiBase = settings.backendApiUrl || env.VITE_API_URL || ''; 
+      
+      // Remove trailing slash if present
+      if (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);
 
-      const apiBase = env.VITE_API_URL || ''; 
       const proxyUrl = `${apiBase}/api/shipping/generate-label`;
 
       // Use custom ID if provided, otherwise default to orderId (which implies DB mock data)
@@ -44,7 +49,7 @@ class SendifyService {
           ? customShipmentId 
           : orderId;
 
-      console.log(`Generating label via Backend Proxy. Shipment ID: ${shipmentIdToUse}`);
+      console.log(`Generating label via Backend Proxy at: ${proxyUrl}. Shipment ID: ${shipmentIdToUse}`);
 
       const payload = {
         shipment_ids: [shipmentIdToUse], 
@@ -58,6 +63,7 @@ class SendifyService {
       };
       
       // Only attach header if user explicitly overrode it in Local Settings.
+      const apiKey = settings.sendifyApiKey;
       if (apiKey) {
           headers['x-api-key'] = apiKey;
       }
@@ -79,7 +85,7 @@ class SendifyService {
         
         // Handle 404 specifically
         if (response.status === 404) {
-             throw new Error("Backend Endpoint Not Found (404). Please ensure your .NET Backend is running.");
+             throw new Error(`Backend Endpoint Not Found (404) at ${proxyUrl}. Please ensure your Backend URL in Settings is correct and the API is running.`);
         }
 
         let errorMessage = `API Error ${response.status}`;
