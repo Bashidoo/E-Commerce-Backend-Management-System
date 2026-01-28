@@ -33,23 +33,39 @@ class SendifyService {
       const settings = this.getSettings();
       const env = (import.meta as any).env || {};
       
-      // Order of precedence:
-      // 1. Local Storage Setting (User configured in UI)
-      // 2. Env Var (VITE_API_URL)
-      // 3. Fallback to empty (relative path)
       let apiBase = settings.backendApiUrl?.trim() || env.VITE_API_URL || ''; 
       
-      // Remove trailing slash if present
+      // Basic URL Cleanup
       if (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);
+      
+      if (!apiBase) {
+        throw new Error("Backend API URL is missing. Please configure it in Settings.");
+      }
 
       const proxyUrl = `${apiBase}/api/shipping/generate-label`;
+      const testUrl = `${apiBase}/api/shipping/test`;
 
-      // FIX: Ensure ID is always a STRING. Sendify API rejects numbers in the JSON array.
+      // 1. DIAGNOSTIC PRE-CHECK
+      console.log(`Diagnosing Connection to: ${apiBase}`);
+      try {
+        const testResp = await fetch(testUrl, { method: 'GET' });
+        if (!testResp.ok) {
+            console.warn(`Warning: Test Endpoint returned ${testResp.status}. The Controller might not be deployed.`);
+        } else {
+            console.log("Diagnostic Check: Shipping Controller is Active.");
+        }
+      } catch (checkErr) {
+        console.warn("Diagnostic Check Failed: Could not reach backend root.", checkErr);
+        // We continue anyway, just in case it's a specific endpoint issue
+      }
+
+      // 2. PREPARE REQUEST
+      // Ensure ID is always a STRING.
       const shipmentIdToUse = customShipmentId && customShipmentId.trim() !== '' 
           ? customShipmentId 
           : String(orderId);
 
-      console.log(`Generating label via Backend Proxy at: ${proxyUrl}. Shipment ID: ${shipmentIdToUse}`);
+      console.log(`Sending Label Request to: ${proxyUrl}. Shipment ID: ${shipmentIdToUse}`);
 
       const payload = {
         shipment_ids: [shipmentIdToUse], 
@@ -62,12 +78,12 @@ class SendifyService {
         'Content-Type': 'application/json'
       };
       
-      // Only attach header if user explicitly overrode it in Local Settings.
       const apiKey = settings.sendifyApiKey;
       if (apiKey) {
           headers['x-api-key'] = apiKey;
       }
 
+      // 3. EXECUTE REQUEST
       const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: headers,
@@ -75,7 +91,6 @@ class SendifyService {
       });
 
       if (!response.ok) {
-        // Safe error reading to prevent "body stream already read"
         let errorText = response.statusText;
         try {
             errorText = await response.text();
@@ -83,19 +98,16 @@ class SendifyService {
             console.warn("Could not read error response body:", readError);
         }
         
-        // Handle 404 specifically
         if (response.status === 404) {
-             throw new Error(`Backend Endpoint Not Found (404) at ${proxyUrl}. Please ensure your Backend URL in Settings is correct and the API is running.`);
+             throw new Error(`Endpoint 404 Not Found at ${proxyUrl}. The API is reachable, but 'api/shipping/generate-label' does not exist. Check Cloud Run logs.`);
         }
 
         let errorMessage = `API Error ${response.status}`;
         try {
-            // Try to parse as JSON if possible
             const errData = JSON.parse(errorText);
             console.error("Sendify API Error Payload:", errData);
             errorMessage = errData.message || errData.error || errorMessage;
         } catch (e) { 
-             // If not JSON, use the raw text
              if (errorText) errorMessage = errorText;
         }
         
@@ -116,12 +128,7 @@ class SendifyService {
     }
   }
 
-  /**
-   * Simple check to see if we have a manual override, otherwise we assume Server is configured.
-   */
   async testConnection(): Promise<boolean> {
-     // We can't truly "test" the server key without making a transaction.
-     // We return true to assume the server is configured correctly.
      return true; 
   }
 }

@@ -25,24 +25,18 @@ var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 Console.WriteLine($"Environment: {env}");
 
 // 1. Get Connection String with Robust Fallback
-// ASP.NET Core usually maps "ConnectionStrings__DefaultConnection" -> "ConnectionStrings:DefaultConnection"
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// Fallback: Check environment variable directly if Configuration didn't pick it up
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     Console.WriteLine("Warning: ConnectionString not found in Configuration. Checking Environment Variables directly...");
     connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 }
 
-// CRITICAL FIX: Fail Fast. 
-// If we don't have a connection string, we cannot start the app. 
-// Throwing here prevents the "No database provider has been configured" error later.
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     var msg = "CRITICAL ERROR: ConnectionString 'DefaultConnection' is NULL or EMPTY. The application cannot start.";
     Console.WriteLine(msg);
-    // This exception will be visible in Cloud Run logs
     throw new InvalidOperationException(msg);
 }
 else
@@ -60,10 +54,8 @@ var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://*:{port}");
 
 // 3. Database Registration
-// We use the validated connectionString from above.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    // FIX: Unconditional registration. We already checked string validity above.
     options.UseNpgsql(connectionString);
 });
 
@@ -160,9 +152,19 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// --- DIAGNOSTIC MIDDLEWARE ---
+// This will log every single request hitting Kestrel.
+// If you don't see this log in Cloud Run, the request isn't reaching the container.
+app.Use(async (context, next) =>
+{
+    Console.WriteLine($">>> Incoming Request: {context.Request.Method} {context.Request.Path}{context.Request.QueryString}");
+    await next();
+});
+// -----------------------------
+
 app.UseExceptionHandler();
 
-// Enable Swagger in ALL environments (including Production) for debugging purposes
+// Enable Swagger in ALL environments
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -173,5 +175,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Root Health Check
+app.MapGet("/", () => new { status = "Active", message = "OrderFlow API is running", timestamp = DateTime.UtcNow });
 
 app.Run();
