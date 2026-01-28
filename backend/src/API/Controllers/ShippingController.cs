@@ -33,23 +33,31 @@ public class ShippingController : ControllerBase
     [HttpPost("book")]
     public async Task<IActionResult> BookShipment([FromBody] BookShipmentRequest request, [FromHeader(Name = "x-api-key")] string? apiKey)
     {
-        var finalApiKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey : _configuration["SENDIFY_API_KEY"];
-
-        // 1. Validate API Key
-        if (string.IsNullOrWhiteSpace(finalApiKey))
+        // 1. Check for Test Mode immediately
+        if (request.IsTest)
         {
-            // If no key, return a Mock Label immediately for testing
             return Ok(new
             {
                 label_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                shipment_id = "mock_" + Guid.NewGuid().ToString().Substring(0, 8),
-                warning = "Running in Mock Mode (No API Key provided)"
+                shipment_id = "test_simulated_" + Guid.NewGuid().ToString().Substring(0, 8),
+                warning = "SIMULATION: No data sent to Sendify. No charge incurred."
             });
         }
 
-        // 2. Construct Real Sendify Payload
-        // Note: In a real production app, you need to select specific products/carriers.
-        // We use a generic payload here.
+        var finalApiKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey : _configuration["SENDIFY_API_KEY"];
+
+        // 2. Validate API Key
+        if (string.IsNullOrWhiteSpace(finalApiKey))
+        {
+            return Ok(new
+            {
+                label_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+                shipment_id = "mock_no_key_" + Guid.NewGuid().ToString().Substring(0, 8),
+                warning = "Running in Mock Mode (No API Key provided on Backend)"
+            });
+        }
+
+        // 3. Construct Real Sendify Payload
         var sendifyUrl = _configuration["SendifySettings:ApiUrl"]?.Replace("/print", "") // Base URL
                          ?? "https://app.sendify.se/external/v1/shipments";
 
@@ -82,7 +90,7 @@ public class ShippingController : ControllerBase
             parcels = new[] {
                 new { weight = 1.0, length = 10, width = 10, height = 10, type = "parcel" }
             },
-            carrier = "dhl" // Defaulting to DHL, might fail if not configured in Sendify account
+            carrier = "dhl" // Defaulting to DHL
         };
 
         try
@@ -97,31 +105,20 @@ public class ShippingController : ControllerBase
 
             if (response.IsSuccessStatusCode)
             {
-                // Parse real response
                 using var doc = JsonDocument.Parse(content);
                 var root = doc.RootElement;
                 var id = root.GetProperty("id").GetString();
-                // If successful, we would normally get the label URL here or need to call print.
-                // For simplicity in this demo, if booking succeeds, we return the print URL logic.
 
                 return Ok(new
                 {
-                    label_url = $"https://app.sendify.se/external/v1/shipments/{id}/print", // Simplified
+                    label_url = $"https://app.sendify.se/external/v1/shipments/{id}/print",
                     shipment_id = id
                 });
             }
             else
             {
-                _logger.LogWarning("Sendify Booking Failed: {Status} - {Content}. Falling back to Mock.", response.StatusCode, content);
-
-                // FALLBACK: Return a Mock Label if the real API fails (e.g. bad carrier config)
-                // This ensures the user sees "Address -> Label" working conceptually.
-                return Ok(new
-                {
-                    label_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-                    shipment_id = "mock_" + Guid.NewGuid().ToString().Substring(0, 8),
-                    warning = $"Real Booking Failed ({response.StatusCode}). Generated Mock Label. Reason: {content}"
-                });
+                _logger.LogWarning("Sendify Booking Failed: {Status} - {Content}.", response.StatusCode, content);
+                return StatusCode(502, new { error = "Sendify Booking Failed", details = content });
             }
         }
         catch (Exception ex)
@@ -183,4 +180,5 @@ public class BookShipmentRequest
     public string City { get; set; }
     public string Country { get; set; }
     public string PostalCode { get; set; }
+    public bool IsTest { get; set; } // New Flag
 }

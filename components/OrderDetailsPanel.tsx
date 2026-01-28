@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   FileText,
   Settings2,
+  TestTube2,
 } from "lucide-react";
 import { orderService } from "../services/orderService";
 import { sendifyService } from "../services/sendifyService";
@@ -34,12 +35,14 @@ const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({
   const [confirmReprint, setConfirmReprint] = useState(false);
   const [customShipmentId, setCustomShipmentId] = useState("");
   const [showAdvancedLabel, setShowAdvancedLabel] = useState(false);
+  const [isTestBooking, setIsTestBooking] = useState(true); // Default to Test mode for safety
   const { showNotification } = useNotification();
 
   React.useEffect(() => {
     setConfirmReprint(false);
     setCustomShipmentId("");
     setShowAdvancedLabel(false);
+    setIsTestBooking(true);
   }, [order?.id]);
 
   if (!order) {
@@ -69,24 +72,34 @@ const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({
       setIsPrinting(true);
       let labelUrl = "";
 
-      // 1. Try to Print Existing
+      // 1. Try to Print Existing (Skip if forcing test booking)
       try {
+        // If user specifically wants to simulate a booking, we skip checking for existing IDs that might fail
+        if (isTestBooking && !customShipmentId && !order.isLabelPrinted) {
+          throw new Error("Force Test Booking");
+        }
         labelUrl = await sendifyService.generateLabel(
           order.id,
           customShipmentId,
         );
       } catch (printError: any) {
-        // 2. If Failed (Not Found), Try to BOOK using address
+        // 2. If Failed (Not Found) OR forcing test, Try to BOOK using address
         if (
-          printError.message.includes("Shipment Not Found") &&
+          (printError.message.includes("Shipment Not Found") ||
+            printError.message === "Force Test Booking") &&
           !customShipmentId
         ) {
-          showNotification(
-            "info",
-            "Shipment ID not found. Attempting to Book Shipment with Address...",
-          );
+          if (!isTestBooking) {
+            showNotification(
+              "info",
+              "Shipment ID not found. Attempting to Book Real Shipment...",
+            );
+          }
 
-          const booking = await sendifyService.bookShipment(order);
+          const booking = await sendifyService.bookShipment(
+            order,
+            isTestBooking,
+          );
           labelUrl = booking.labelUrl;
 
           if (booking.warning) {
@@ -109,10 +122,6 @@ const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({
       setIsPrinting(false);
       setConfirmReprint(false);
       onOrderUpdated(updated);
-
-      if (!labelUrl.includes("dummy.pdf")) {
-        showNotification("success", "Shipping label generated.");
-      }
 
       if (labelUrl) {
         window.open(labelUrl, "_blank");
@@ -228,11 +237,36 @@ const OrderDetailsPanel: React.FC<OrderDetailsPanelProps> = ({
                     : "Generate Label"}
               </span>
             </button>
+
+            <button
+              onClick={() => setShowAdvancedLabel(!showAdvancedLabel)}
+              className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1"
+            >
+              <Settings2 size={12} />{" "}
+              {showAdvancedLabel ? "Hide Options" : "Advanced Options"}
+            </button>
           </div>
         </div>
 
         {showAdvancedLabel && (
           <div className="mt-2 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg animate-in fade-in zoom-in-95 shadow-inner">
+            {/* Test Mode Toggle */}
+            <div className="flex items-center gap-2 mb-3 bg-blue-50 dark:bg-blue-900/20 p-2 rounded border border-blue-100 dark:border-blue-800">
+              <input
+                type="checkbox"
+                id="testMode"
+                checked={isTestBooking}
+                onChange={(e) => setIsTestBooking(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+              />
+              <label
+                htmlFor="testMode"
+                className="text-xs font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1 cursor-pointer select-none"
+              >
+                <TestTube2 size={14} /> Simulate Booking (No Charge)
+              </label>
+            </div>
+
             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
               Manual Sendify Shipment ID
             </label>

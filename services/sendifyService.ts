@@ -36,7 +36,7 @@ class SendifyService {
   /**
    * Books a shipment using the address details.
    */
-  async bookShipment(order: Order): Promise<{ labelUrl: string, warning?: string }> {
+  async bookShipment(order: Order, isTest: boolean = false): Promise<{ labelUrl: string, warning?: string }> {
      const apiBase = this.getApiBase();
      const settings = this.getSettings();
      const url = `${apiBase}/api/shipping/book`;
@@ -55,7 +55,8 @@ class SendifyService {
         AddressLine: address,
         City: city,
         Country: country,
-        PostalCode: zip
+        PostalCode: zip,
+        IsTest: isTest
      };
 
      const headers: any = { 'Content-Type': 'application/json' };
@@ -70,7 +71,7 @@ class SendifyService {
      const data = await response.json();
 
      if (!response.ok) {
-         throw new Error(data.error || "Booking failed");
+         throw new Error(data.error || data.details || "Booking failed");
      }
 
      return { 
